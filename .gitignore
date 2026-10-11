@@ -55,3 +55,6 @@ app.*.map.json
 # Vercel / Python
 .vercel
 __pycache__/
+
+.vercel
+.env*
