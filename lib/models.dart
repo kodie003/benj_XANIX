@@ -84,6 +84,9 @@ class AppState extends ChangeNotifier {
   List<Item> items = [];
   List<Movement> movements = [];
   Set<String> actedOn = {}; // titles of actions the owner said they did
+  /// Busy or quiet days the owner knows are coming: {name, start, effect}.
+  /// effect = expected change in customers, e.g. -0.4 for a school break.
+  List<Map<String, dynamic>> events = [];
 
   Map<String, dynamic>? insights;
   String? error;
@@ -96,8 +99,6 @@ class AppState extends ChangeNotifier {
     final raw = prefs.getString(_key);
     if (raw != null) _fromJson(jsonDecode(raw));
     notifyListeners();
-    // ?demo in the link opens straight into the demo shop - handy for pitching.
-    if (!isSetUp && Uri.base.queryParameters.containsKey('demo')) return loadDemo();
     if (isSetUp) refresh();
   }
 
@@ -111,6 +112,7 @@ class AppState extends ChangeNotifier {
         'items': items.map((i) => i.toJson()).toList(),
         'movements': movements.map((m) => m.toJson()).toList(),
         'actedOn': actedOn.toList(),
+        'events': events,
       };
 
   void _fromJson(Map<String, dynamic> j) {
@@ -118,33 +120,14 @@ class AppState extends ChangeNotifier {
     items = [for (final i in j['items'] ?? []) Item.fromJson(i)];
     movements = [for (final m in j['movements'] ?? []) Movement.fromJson(m)];
     actedOn = {...List<String>.from(j['actedOn'] ?? [])};
+    events = [for (final e in j['events'] ?? []) Map<String, dynamic>.from(e)];
   }
 
-  Future<void> setUp(Map<String, dynamic> biz, List<Item> newItems, Map<String, double> opening) async {
+  Future<void> setUp(Map<String, dynamic> biz) async {
     business = biz;
-    items = newItems;
-    final today = isoDay(DateTime.now());
-    movements = [
-      for (final e in opening.entries)
-        if (e.value > 0) Movement(e.key, 'opening', e.value, today),
-    ];
     await _save();
     notifyListeners();
     refresh();
-  }
-
-  Future<void> loadDemo() async {
-    loading = true;
-    notifyListeners();
-    try {
-      _fromJson(await Api.demoData());
-      await _save();
-      await refresh();
-    } catch (e) {
-      error = 'Could not load the demo shop: $e';
-      loading = false;
-      notifyListeners();
-    }
   }
 
   Future<void> addMovements(List<Movement> list) async {
@@ -154,10 +137,27 @@ class AppState extends ChangeNotifier {
     refresh();
   }
 
-  Future<void> addItem(Item item) async {
+  /// New item plus how many the owner has right now (its opening stock).
+  Future<void> addItem(Item item, double opening) async {
     items.add(item);
+    if (opening > 0) movements.add(Movement(item.id, 'opening', opening, isoDay(DateTime.now())));
     await _save();
     notifyListeners();
+    refresh();
+  }
+
+  Future<void> addEvent(Map<String, dynamic> event) async {
+    events.add(event);
+    await _save();
+    notifyListeners();
+    refresh();
+  }
+
+  Future<void> removeEvent(Map<String, dynamic> event) async {
+    events.remove(event);
+    await _save();
+    notifyListeners();
+    refresh();
   }
 
   Future<void> toggleActed(String title) async {
@@ -171,6 +171,7 @@ class AppState extends ChangeNotifier {
     items = [];
     movements = [];
     actedOn = {};
+    events = [];
     insights = null;
     await _save();
     notifyListeners();
@@ -200,6 +201,7 @@ class AppState extends ChangeNotifier {
         'business': business,
         'items': items.map((i) => i.toJson()).toList(),
         'movements': movements.map((m) => m.toJson()).toList(),
+        'events': events,
         'today': isoDay(DateTime.now()),
       });
     } catch (e) {

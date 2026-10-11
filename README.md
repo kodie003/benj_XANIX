@@ -16,15 +16,19 @@ Ghana already has record-keeping tools (SikaBooks, Chopmoney, OZÉ, Bumpa, Kippa
 |---|---|
 | Charts the owner never opens | **3 plain actions a week**, each with the reason and the cedis at stake |
 | One low-stock alert per item | **One market list** for the next trip: "buy 14 bags rice; 13 bottles oil…" |
-| Doesn't know the calendar | **Knows campus rhythm**: "Mid-sem break starts Friday — make 45% less waakye" |
-| Records sales | Spots **waste** ("you threw away 44 plates = GHS 528") and **weekday patterns** ("Saturdays sell 55% less bread") |
+| Doesn't know the calendar | **Knows the owner's rhythm**: the owner adds busy or quiet days (school break, exams), and advice adjusts the week before |
+| Records sales | Spots **waste** (how much was thrown away, in cedis) and **weekday patterns** (which days sell less) |
 | Keeps the owner inside the app | Sends the week as a **WhatsApp message**, ready to share |
 | Assumes the advice works | **"I did this"** on each action measures whether advice changes behaviour (our north-star metric) |
 
 ## Try it
 
-- Open the deployment with `?demo` on the end (e.g. `https://<your-app>.vercel.app/?demo`). This loads **Auntie Esi's Provisions & Waakye**, a simulated shop with 4 weeks of records that triggers every rule.
-- Or set up your own shop from a template (rice/provisions, food vendor, campus snacks), enter today's stock, then record at the end of each day.
+The app starts empty. There is no demo or sample data; everything you see comes from what the owner enters.
+
+1. Name the business.
+2. **Items** tab: add each item with what you pay, what you charge, your reorder level, and how many you have now. Optionally add upcoming busy or quiet days.
+3. **Record** tab: at the end of each day, enter how many were sold, bought/made, or thrown away.
+4. **This week** tab: see the 3 actions, then send them to WhatsApp. Weekday patterns appear after 3 weeks of records.
 
 ## How it works
 
@@ -41,15 +45,15 @@ Ghana already has record-keeping tools (SikaBooks, Chopmoney, OZÉ, Bumpa, Kippa
 - **No logins, no database (yet).** Records live on the phone (`shared_preferences`). The engine is stateless: the app sends its records and gets advice back. The owner's data stays the owner's (PRD principle).
 - **Every insight is a one-sentence rule** (PRD §13). No ML until we have weeks of real data.
 
-| Rule | What it says | Where |
+| Rule | What it looks at | Where |
 |---|---|---|
 | R1/R2 Low stock + run-out forecast | One combined market list, sized to cover a week | `rule_restock` |
-| R3 Top/bottom earners | "Waakye made 41% of your profit — never run out" | `rule_profit_mix` |
-| R4 Weekday pattern (3+ weeks of data) | "On Saturdays prepare ~10 bread, not 18" | `rule_weekday` |
-| R5 Margin squeeze | "Supplier price went up 9→11; raise to GHS 15" | `rule_margin` |
-| R7 Calendar shift | Ashesi calendar events → prep advice | `rule_calendar` + `CALENDAR` |
-| R8 Data gap | "Send us today's tally" | `rule_data_gap` |
-| Waste | "You threw away 23% of waakye — make about 28 a day" | `rule_waste` |
+| R3 Top/bottom earners | Which item makes most of the profit, and which loses money | `rule_profit_mix` |
+| R4 Weekday pattern (3+ weeks of data) | Days that sell ≥25% less/more of a fresh item | `rule_weekday` |
+| R5 Margin squeeze | Supplier price rose (from "Bought" entries) → suggested new price | `rule_margin` |
+| R7 Calendar shift | Busy or quiet days the owner entered | `rule_calendar` |
+| R8 Data gap | No tally for 2+ days | `rule_data_gap` |
+| Waste | More than 10% of a fresh item thrown away | `rule_waste` |
 
 Actions are ranked by urgency, then by **cedis at stake**, with at most one per rule. The owner only ever sees 3.
 
@@ -67,11 +71,9 @@ Import the GitHub repo into Vercel. `vercel.json` already configures everything:
 
 For an Android build later: `flutter build apk --dart-define=API_BASE=https://<your-app>.vercel.app`
 
-## Placeholders to replace with evidence
+## Tunable thresholds
 
-- `CALENDAR` dates in `api/insights.py` are **guesses**. Replace them with the official Ashesi academic calendar.
-- Template prices in `lib/templates.dart` are rough estimates. Confirm them in interviews.
-- Thresholds (`RUNOUT_DAYS`, `WASTE_SHARE`, `THIN_MARGIN`…) are the PRD's `[X]` placeholders.
+The only built-in numbers are the rule thresholds at the top of `api/insights.py` (`RUNOUT_DAYS`, `WASTE_SHARE`, `THIN_MARGIN`…). These are the PRD's `[X]` placeholders: tune them from interview evidence.
 
 ## Next steps (deliberately not built yet)
 
@@ -79,5 +81,5 @@ For an Android build later: `flutter build apk --dart-define=API_BASE=https://<y
 2. Automated weekly WhatsApp send via the Business Cloud API (FR-D2). Today the owner taps "Send to WhatsApp".
 3. Average sales only over days the item was **in stock**. Today a stock-out makes demand look lower than it is.
 4. Physical count vs expected (R6), expenses, payment type (cash / MoMo / credit), credit "who owes me".
-5. Photo-of-tally-sheet and voice-note entry; Twi labels.
+5. Business-type starter item lists (once interviews give us real prices), photo-of-tally-sheet and voice-note entry; Twi labels.
 6. A real offline queue (records already save offline; only the advice needs a network).
