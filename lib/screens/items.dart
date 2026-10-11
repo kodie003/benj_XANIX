@@ -25,11 +25,30 @@ class ItemsScreen extends StatelessWidget {
               ]),
             ),
           ),
+        if (state.items.isEmpty) const Text('No items yet. Add everything you sell, with what you pay and what you charge.'),
         const SizedBox(height: 8),
         OutlinedButton.icon(
           icon: const Icon(Icons.add),
           label: const Text('Add an item'),
           onPressed: () => showDialog(context: context, builder: (_) => _AddItemDialog(state: state)),
+        ),
+        const Divider(height: 32),
+        // R7: the owner knows their own rhythm (school breaks, market days, festivals).
+        Text('Busy or quiet days coming up', style: Theme.of(context).textTheme.titleMedium),
+        for (final e in state.events)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(e['name']),
+            subtitle: Text('From ${e['start']} - expect ${((e['effect'] as num) * 100).round().abs()}% '
+                '${(e['effect'] as num) < 0 ? 'fewer' : 'more'} customers'),
+            trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => state.removeEvent(e)),
+          ),
+        if (state.events.isEmpty) const Text('e.g. school break, exams, a festival. SeeYou adjusts your advice the week before.'),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.event),
+          label: const Text('Add a busy or quiet day'),
+          onPressed: () => showDialog(context: context, builder: (_) => _AddEventDialog(state: state)),
         ),
       ],
     );
@@ -50,6 +69,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
   final _cost = TextEditingController();
   final _price = TextEditingController();
   final _reorder = TextEditingController(text: '0');
+  final _opening = TextEditingController();
   bool _perishable = false;
 
   @override
@@ -68,6 +88,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
           field(_cost, 'What you pay for one (GHS)', number: true),
           field(_price, 'What you sell one for (GHS)', number: true),
           field(_reorder, 'Buy more when only this many are left', number: true),
+          field(_opening, 'How many do you have right now?', number: true),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
             value: _perishable,
@@ -90,7 +111,66 @@ class _AddItemDialogState extends State<_AddItemDialog> {
               price: price,
               reorder: double.tryParse(_reorder.text) ?? 0,
               perishable: _perishable,
-            ));
+            ), double.tryParse(_opening.text) ?? 0);
+            Navigator.pop(context);
+          },
+          child: const Text('Add'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AddEventDialog extends StatefulWidget {
+  const _AddEventDialog({required this.state});
+  final AppState state;
+
+  @override
+  State<_AddEventDialog> createState() => _AddEventDialogState();
+}
+
+class _AddEventDialogState extends State<_AddEventDialog> {
+  final _name = TextEditingController();
+  final _percent = TextEditingController();
+  DateTime? _start;
+  bool _fewer = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Busy or quiet day'),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: _name, decoration: const InputDecoration(labelText: 'What is happening?')),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(_start == null ? 'Pick the start date' : 'Starts ${isoDay(_start!)}'),
+            trailing: const Icon(Icons.calendar_today),
+            onTap: () async {
+              final now = DateTime.now();
+              final d = await showDatePicker(context: context, firstDate: now, lastDate: now.add(const Duration(days: 365)));
+              if (d != null) setState(() => _start = d);
+            },
+          ),
+          SegmentedButton<bool>(
+            segments: const [ButtonSegment(value: true, label: Text('Fewer customers')), ButtonSegment(value: false, label: Text('More'))],
+            selected: {_fewer},
+            onSelectionChanged: (v) => setState(() => _fewer = v.first),
+          ),
+          TextField(
+            controller: _percent,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'By about how much?', suffixText: '%'),
+          ),
+        ]),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () {
+            final pct = double.tryParse(_percent.text);
+            if (_name.text.trim().isEmpty || _start == null || pct == null) return;
+            widget.state.addEvent({'name': _name.text.trim(), 'start': isoDay(_start!), 'effect': (_fewer ? -pct : pct) / 100});
             Navigator.pop(context);
           },
           child: const Text('Add'),

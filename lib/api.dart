@@ -10,22 +10,14 @@ import 'package:http/http.dart' as http;
 class Api {
   static const _base = String.fromEnvironment('API_BASE');
 
-  static Uri _url(String query) => _base.isEmpty
-      ? Uri.base.resolve('/api/insights$query')
-      : Uri.parse('$_base/api/insights$query');
+  static Uri _url() => _base.isEmpty ? Uri.base.resolve('/api/insights') : Uri.parse('$_base/api/insights');
 
   static Future<Map<String, dynamic>> insights(Map<String, dynamic> body) async {
     final res = await http.post(
-      _url(''),
+      _url(),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
-    if (res.statusCode != 200) throw Exception('engine said ${res.statusCode}');
-    return jsonDecode(res.body);
-  }
-
-  static Future<Map<String, dynamic>> demoData() async {
-    final res = await http.get(_url('?demo=data'));
     if (res.statusCode != 200) throw Exception('engine said ${res.statusCode}');
     return jsonDecode(res.body);
   }

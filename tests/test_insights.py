@@ -6,7 +6,9 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
 
-from insights import analyse, demo_business  # noqa: E402
+from datetime import date, timedelta  # noqa: E402
+
+from insights import analyse  # noqa: E402
 
 
 def shop(moves, items=None, today="2026-10-12"):
@@ -52,16 +54,39 @@ class RuleTests(unittest.TestCase):
         self.assertIn("went up", squeeze[0]["why"])
 
 
-class DemoTests(unittest.TestCase):
-    def test_demo_gives_three_different_actions(self):
-        r = analyse(demo_business("2026-10-14"))
-        self.assertEqual(len(r["actions"]), 3)
-        self.assertEqual(len({a["rule"] for a in r["actions"]}), 3)
+def three_weeks():
+    """Test-only fixture: a perishable that sells 20 a day but only 8 on Saturdays."""
+    items = [{"id": "bread", "name": "Bread", "unit": "loaf", "cost": 10, "price": 15, "perishable": True}]
+    start, moves = date(2026, 9, 14), []
+    for n in range(28):
+        d = start + timedelta(days=n)
+        sold = 8 if d.weekday() == 5 else 20
+        moves += [
+            {"item": "bread", "type": "received", "qty": 22, "date": d.isoformat()},
+            {"item": "bread", "type": "sale", "qty": sold, "date": d.isoformat()},
+            {"item": "bread", "type": "waste", "qty": 22 - sold, "date": d.isoformat()},
+        ]
+    return shop(moves, items, today=(start + timedelta(days=27)).isoformat())
+
+
+class PatternTests(unittest.TestCase):
+    def test_saturday_pattern_and_waste(self):
+        r = analyse(three_weeks())
+        rules = {a["rule"]: a for a in r["actions"] + r["more"]}
+        self.assertIn("Saturday", rules["R4"]["title"])
+        self.assertIn("WASTE", rules)
         self.assertIn("Reply 1, 2 or 3", r["whatsapp"])
 
-    def test_demo_sees_saturday_pattern(self):
-        r = analyse(demo_business("2026-10-14"))
-        self.assertTrue(any(a["rule"] == "R4" and "Saturday" in a["title"] for a in r["actions"] + r["more"]))
+    def test_owner_event_changes_advice(self):
+        data = three_weeks()
+        data["events"] = [{"name": "School break", "start": "2026-10-13", "effect": -0.4}]
+        r = analyse(data)
+        cal = [a for a in r["actions"] + r["more"] if a["rule"] == "R7"]
+        self.assertIn("School break", cal[0]["title"])
+
+    def test_at_most_one_action_per_rule(self):
+        r = analyse(three_weeks())
+        self.assertEqual(len({a["rule"] for a in r["actions"]}), len(r["actions"]))
 
 
 if __name__ == "__main__":

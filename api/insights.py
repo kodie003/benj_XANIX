@@ -8,13 +8,12 @@ stock movements) and gets back numbers, alerts and the weekly WhatsApp message.
 Nothing is stored server-side, so the owner's data stays on the owner's phone.
 
 Served on Vercel as a Python function:
-    POST /api/insights   body = {business, items, movements, today?}
-    GET  /api/insights   -> runs on the built-in demo business
+    POST /api/insights   body = {business, items, movements, events?, today?}
+    GET  /api/insights   -> health check
 """
 
 import json
 import math
-import random
 from collections import defaultdict
 from datetime import date, timedelta
 from http.server import BaseHTTPRequestHandler
@@ -28,15 +27,6 @@ MIN_WEEKS_FOR_PATTERN = 3
 THIN_MARGIN = 0.85  # R5: cost is more than 85% of the selling price
 WASTE_SHARE = 0.10  # perishables: more than 10% thrown away
 MAX_ACTIONS = 3
-
-# R7: local rhythm. Effect = expected change in customers near campus.
-# [Placeholder] dates are our guesses - replace with the official Ashesi calendar.
-CALENDAR = [
-    {"name": "Mid-semester break", "start": "2026-10-16", "end": "2026-10-20", "effect": -0.45},
-    {"name": "Homecoming weekend", "start": "2026-10-31", "end": "2026-11-01", "effect": 0.30},
-    {"name": "Final exams", "start": "2026-12-07", "end": "2026-12-18", "effect": -0.20},
-    {"name": "Christmas break", "start": "2026-12-19", "end": "2027-01-10", "effect": -0.70},
-]
 
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -142,12 +132,15 @@ def analyse(data):
     }
 
     actions = []
-    actions += rule_data_gap(recorded_days, today)
+    if not items:
+        actions.append(action("R8", "Add the items you sell", "Go to the Items tab and add each item with what you pay and what you charge.", 0, 3))
+    else:
+        actions += rule_data_gap(recorded_days, today)
     actions += rule_restock(rows, today)
     actions += rule_weekday(rows, sold_by_day, recorded_days, today)
     actions += rule_waste(rows)
     actions += rule_margin(rows)
-    actions += rule_calendar(rows, today)
+    actions += rule_calendar(rows, data.get("events", []), today)
     actions += rule_profit_mix(rows, summary)
 
     # Rank: urgent first, then by money at stake. The owner only sees 3,
@@ -321,9 +314,11 @@ def rule_margin(rows):  # R5 margin squeeze
     return out
 
 
-def rule_calendar(rows, today):  # R7 local rhythm
+def rule_calendar(rows, events, today):  # R7 local rhythm
+    """events come from the owner: {name, start, effect} - effect is the expected
+    change in customers, e.g. -0.4 for a school break, +0.3 for a campus event."""
     out = []
-    for ev in CALENDAR:
+    for ev in events:
         start = date.fromisoformat(ev["start"])
         lead = (start - today).days
         if not 0 <= lead <= 7:
@@ -333,10 +328,10 @@ def rule_calendar(rows, today):  # R7 local rhythm
         if ev["effect"] < 0:
             what = f"make {abs(ev['effect']):.0%} less {', '.join(perishables)}" if perishables else "don't overstock"
             title = f"{ev['name']} starts {when}: {what}"
-            why = f"Fewer students are around, so expect about {abs(ev['effect']):.0%} fewer customers."
+            why = f"You expect about {abs(ev['effect']):.0%} fewer customers then."
         else:
             title = f"{ev['name']} {when}: stock about {ev['effect']:.0%} more of your best sellers"
-            why = "More people on and around campus usually means a busier few days."
+            why = f"You expect about {ev['effect']:.0%} more customers then."
         week_sales = sum(r["sales_week"] for r in rows)
         out.append(action("R7", title, why, week_sales * abs(ev["effect"]) * 0.2, 2 if lead <= 3 else 1))
     return out
@@ -399,69 +394,6 @@ def change(now, before):
     return f" ({'up' if pct >= 0 else 'down'} {abs(pct):.0%} vs last week)"
 
 
-# --- Demo business ---------------------------------------------------------------
-
-
-def demo_business(today=None):
-    """28 days of believable history for a provisions + food shop near Ashesi.
-
-    Seeded so every rule has something to say: rice running low, oil about to run
-    out, bread and waakye wasted on Saturdays, tomato paste squeezed by a supplier
-    price rise, and the mid-semester break coming up.
-    """
-    today = date.fromisoformat(today) if today else date.today()
-    rng = random.Random(7)
-    items = [
-        {"id": "rice5", "name": "Rice (5 kg bag)", "unit": "bag", "cost": 92, "price": 115, "reorder": 6, "perishable": False},
-        {"id": "oil", "name": "Cooking oil (1 L)", "unit": "bottle", "cost": 32, "price": 40, "reorder": 4, "perishable": False},
-        {"id": "paste", "name": "Tomato paste (tin)", "unit": "tin", "cost": 9, "price": 12, "reorder": 10, "perishable": False},
-        {"id": "eggs", "name": "Eggs", "unit": "crate", "cost": 62, "price": 75, "reorder": 2, "perishable": False},
-        {"id": "bread", "name": "Sugar bread", "unit": "loaf", "cost": 10, "price": 15, "reorder": 0, "perishable": True},
-        {"id": "waakye", "name": "Waakye", "unit": "plate", "cost": 12, "price": 20, "reorder": 0, "perishable": True},
-    ]
-    daily = {"rice5": 2.2, "oil": 3.0, "paste": 6.0, "eggs": 1.0, "bread": 18.0, "waakye": 30.0}
-    made_daily = {"bread": 20, "waakye": 32}  # same amount every day - the habit we want to change
-    saturday = {"bread": 0.45, "waakye": 0.6}  # students leave campus at weekends
-    restock_to = {"rice5": 25, "oil": 30, "paste": 60, "eggs": 8}
-    stock = {"rice5": 25, "oil": 30, "paste": 60, "eggs": 8}
-    start = today - timedelta(days=28)
-    moves = [{"item": k, "type": "opening", "qty": v, "date": start.isoformat()} for k, v in stock.items()]
-    for n in range(28):
-        day = start + timedelta(days=n)
-        if day.weekday() == 6:  # closed on Sundays
-            continue
-        d = day.isoformat()
-        # Weekly market trip on Mondays - except the last one, which is why stock is low now.
-        if day.weekday() == 0 and n < 21:
-            for k, target in restock_to.items():
-                if stock[k] < target:
-                    m = {"item": k, "type": "received", "qty": target - stock[k], "date": d}
-                    if k == "paste" and n >= 14:
-                        m["cost"] = 11  # supplier raised the price; owner kept selling at GHS 12
-                    moves.append(m)
-                    stock[k] = target
-        for k, base in daily.items():
-            f = saturday.get(k, 1.0) if day.weekday() == 5 else 1.0
-            demand = max(0, round(rng.gauss(base * f, base * 0.15)))
-            if k in made_daily:
-                made = made_daily[k]
-                sold = min(demand, made)
-                moves.append({"item": k, "type": "received", "qty": made, "date": d})
-                if made > sold:
-                    moves.append({"item": k, "type": "waste", "qty": made - sold, "date": d})
-            else:
-                sold = min(demand, stock[k])
-                stock[k] -= sold
-            if sold:
-                moves.append({"item": k, "type": "sale", "qty": sold, "date": d})
-    return {
-        "business": {"name": "Auntie Esi's Provisions & Waakye", "owner": "Auntie Esi", "type": "provisions"},
-        "items": items,
-        "movements": moves,
-        "today": today.isoformat(),
-    }
-
-
 # --- Vercel handler -----------------------------------------------------------------
 
 
@@ -479,12 +411,7 @@ class handler(BaseHTTPRequestHandler):
         self._send(204, {})
 
     def do_GET(self):
-        # ?demo=data returns the raw demo records so the app can load them
-        demo = demo_business()
-        if "demo=data" in self.path:
-            self._send(200, demo)
-        else:
-            self._send(200, analyse(demo))
+        self._send(200, {"ok": True, "engine": "SeeYou insights", "usage": "POST your records here"})
 
     def do_POST(self):
         try:
