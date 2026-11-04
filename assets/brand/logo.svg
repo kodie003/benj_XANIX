@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -928.5 2341.8 1194.5">
   <title>benj</title>
   <defs>
-    <clipPath id="in"><rect x="-100000" y="-100000" width="101111.8" height="200000"/></clipPath>
-    <clipPath id="out"><rect x="1111.8" y="-100000" width="100000" height="200000"/></clipPath>
+    <clipPath id="in"><rect x="-100000" y="-100000" width="100999.8" height="200000"/></clipPath>
+    <clipPath id="out"><rect x="999.8" y="-100000" width="100000" height="200000"/></clipPath>
   </defs>
-  <rect x="0" y="-928.5" width="1111.8" height="1194.5" rx="286.7" fill="#1B7A3D"/>
+  <rect x="0" y="-928.5" width="999.8" height="1194.5" rx="286.7" fill="#1B7A3D"/>
   <circle cx="475.5" cy="-279.0" r="224.0" fill="none" stroke="#FFFFFF" stroke-width="126"/>
   <path d="M251.5 -279.0 V-677.0" stroke="#FFFFFF" stroke-width="126" stroke-linecap="round"/>
   <path d="M633.9 -120.6 L768.6 14.0" stroke="#FFFFFF" stroke-width="126" stroke-linecap="round"/>
