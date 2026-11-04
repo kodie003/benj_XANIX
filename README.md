@@ -59,7 +59,12 @@ Actions are ranked by urgency, then by **cedis at stake**, with at most one per 
 
 ## Logo
 
-`assets/brand/logo.svg` (full) and `assets/brand/mark.svg` (the b tile) are drawn from **Poppins Bold** outlines (SIL Open Font License, so it can be used in a logo). The white b in the tile and the e, n, j beside it are the same letters at the same size, so stroke weight and height always match; the tile is square, centred on the b, and its bottom edge lines up with the j. Green is `#1B7A3D`, which also seeds the app's colours. It appears on sign-in, in the top bar, on the loading screen, as the browser-tab icon, the home-screen install icon (including a crop-safe version) and the Android launcher icon. The generator scripts and source files are in the team's docs folder (`logo/final`).
+The **b is a magnifying glass**: a stem, a lens and a handle, because benj helps owners look closely at their shop. `assets/brand/logo.svg` (full) and `assets/brand/mark.svg` (the b tile) are generated, not hand-drawn, so they stay proportional:
+* the lens is exactly as tall as the letter o, so it lines up with **e, n, j** (Poppins Bold, SIL Open Font License);
+* the white strokes are slightly thinner than Poppins Bold's, because white on green reads heavier; the result looks the same weight as "enj";
+* the tile is square, the b is optically centred in it, and the tile's bottom edge lines up with the j.
+
+Green is `#1B7A3D`, which also seeds the app's colours. The logo appears on sign-in, in the top bar, on the loading screen, as the browser-tab icon, the install icon (with a crop-safe version for round launchers) and the Android launcher icon. Source, generator script and font are in the team's docs folder (`logo/final`).
 
 ## Sign-in (Firebase Auth, project benj-27c66)
 
