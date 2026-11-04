@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
 import '../brand.dart';
 import '../poddy/poddy.dart';
 
@@ -43,6 +45,8 @@ class InfoScreen extends StatelessWidget {
           const SizedBox(height: 6),
           Text(body, style: text.bodyLarge?.copyWith(height: 1.45)),
         ],
+        const SizedBox(height: 24),
+        const Center(child: SupportLink(prefix: 'Write to us: ')),
       ]),
     );
   }
@@ -70,6 +74,7 @@ const aboutSections = <(String, String)>[
         'It is an early version that we are testing with shop owners and improving as we go.',
   ),
   ('Credits', poddyCredit),
+  ('Contact', 'Questions, ideas or problems? Email $supportEmail.'),
 ];
 
 const privacySections = <(String, String)>[
@@ -129,6 +134,21 @@ const privacySections = <(String, String)>[
   ),
   (
     'Questions',
-    'Speak to the benj team at Ashesi University (XANIX Challenge 2026).',
+    'Email $supportEmail. You can also use it to ask for a copy of your data, to correct it, or to have it deleted.',
   ),
 ];
+
+/// "Email benj.support@gmail.com" that opens the phone's email app.
+class SupportLink extends StatelessWidget {
+  const SupportLink({super.key, this.prefix = '', this.subject = 'benj'});
+  final String prefix, subject;
+
+  @override
+  Widget build(BuildContext context) => Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        if (prefix.isNotEmpty) Text(prefix, style: Theme.of(context).textTheme.bodyMedium),
+        TextButton(
+          onPressed: () => launchUrl(Uri(scheme: 'mailto', path: supportEmail, query: 'subject=${Uri.encodeComponent(subject)}')),
+          child: const Text(supportEmail),
+        ),
+      ]);
+}

@@ -63,7 +63,7 @@ Green is `#1B7A3D`, which also seeds the app's colours. The logo appears on sign
 
 The first screen (`lib/screens/auth.dart`) is the **Create a benj account** form: business name, phone number, password, repeat password and a consent tick. Below it: **Continue with Google**, **Continue with email**, "Already have a benj account? **Sign in**", and **About · Privacy** in the footer (`lib/screens/info.dart`, written as plain sections so the team can update them).
 * **Phone numbers:** the country dropdown defaults to Ghana (+233), where the number must be exactly 10 digits starting with 0 (024 123 4567 becomes +233 24 123 4567). Other countries in the dropdown use their own length (`lib/core/countries.dart`).
-* **A benj account** is a Firebase email/password account whose id is the number at a reserved address (`233241234567@phone.benj.invalid`, which can never receive mail). No SMS is sent, so it costs nothing. The number is not verified, and a forgotten password is reset by a teammate in the Firebase console.
+* **A benj account** is a Firebase email/password account whose id is the number at a reserved address (`233241234567@phone.benj.invalid`, which can never receive mail). No SMS is sent, so it costs nothing. The number is not verified, and a forgotten password is reset by a teammate in the Firebase console when the owner emails **benj.support@gmail.com**.
 * **Google** is one tap; **email** has its own screen with "Forgot password" by email.
 
 The sign-in and email screens have a back button and Poddy hovering at the top. Errors are explained in plain English (`lib/auth_service.dart`).

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+/// Where owners write for help, password resets or privacy requests.
+const supportEmail = 'benj.support@gmail.com';
+
 /// The benj green, taken from the logo. Also seeds the app's colour scheme.
 const benjGreen = Color(0xFF1B7A3D);
 
