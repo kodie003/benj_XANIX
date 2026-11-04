@@ -178,6 +178,7 @@ class SettingsScreen extends StatelessWidget {
     }
     showDialog<void>(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
     try {
+      await auth.unregister();
       await repo.deleteEverything();
       await auth.deleteAccount();
       if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
@@ -226,7 +227,17 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
     if (ok == true) {
-      await repo.saveShop(_copy(shop, name: name.text.trim(), ownerName: owner.text.trim(), location: location.text.trim(), ownerPhone: phone.text.trim()));
+      final newName = name.text.trim();
+      if (newName != shop.name) {
+        // Business names sign people in, so a new name must not belong to another shop.
+        try {
+          await auth.registerNames(business: newName);
+        } catch (e) {
+          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AuthService.friendly(e))));
+          return;
+        }
+      }
+      await repo.saveShop(_copy(shop, name: newName, ownerName: owner.text.trim(), location: location.text.trim(), ownerPhone: phone.text.trim()));
     }
   }
 

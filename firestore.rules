@@ -94,6 +94,13 @@ service cloud.firestore {
       }
     }
 
+    // Private sign-in index (business name / phone / email -> account). Owners can never
+    // read it; only benj's account service (api/accounts.py), signed in as this
+    // service login, can. It only reveals an account after Firebase checks the password.
+    match /logins/{key} {
+      allow read, write: if request.auth != null && request.auth.token.email == 'svc-logins@benj.invalid';
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

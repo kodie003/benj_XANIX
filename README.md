@@ -61,18 +61,18 @@ Green is `#1B7A3D`, which also seeds the app's colours. The logo appears on sign
 
 ## Sign-in (Firebase Auth, project benj-27c66)
 
-The first screen (`lib/screens/auth.dart`) is the **Create a benj account** form: business name, phone number, password, repeat password and a consent tick. Below it: **Continue with Google**, **Continue with email**, "Already have a benj account? **Sign in**", and **About · Privacy** in the footer (`lib/screens/info.dart`, written as plain sections so the team can update them).
-* **Phone numbers:** the country dropdown defaults to Ghana (+233), where the number must be exactly 10 digits starting with 0 (024 123 4567 becomes +233 24 123 4567). Other countries in the dropdown use their own length (`lib/core/countries.dart`).
-* **A benj account** is a Firebase email/password account whose id is the number at a reserved address (`233241234567@phone.benj.invalid`, which can never receive mail). No SMS is sent, so it costs nothing. The number is not verified, and a forgotten password is reset by a teammate in the Firebase console when the owner emails **benj.support@gmail.com**.
-* **Google** is one tap; **email** has its own screen with "Forgot password" by email.
+**Create a benj account** is the first screen (`lib/screens/auth.dart`): business name, a phone number and/or an email (at least one), password twice, and a consent tick. **Continue with Google** is at the bottom; **About · Privacy** in the footer (`lib/screens/info.dart`).
+* **Phone:** the country dropdown defaults to Ghana (+233), where numbers must be 10 digits starting with 0. Other countries use their own length (`lib/core/countries.dart`); errors are one line, e.g. "Ghana numbers should be 10 digits, starting with 0."
+* **Business names are unique** on benj, so an owner can sign in with it. A second "Ama Provisions" is asked to add their area.
+* **Sign in** takes the business name, phone or email, plus the password. Poddy says "Heyy, good to see you!". **Forgot password?** sends Firebase's reset link to the account's email; accounts without an email write to benj.support@gmail.com (SMS reset can come later).
 
-The sign-in and email screens have a back button and Poddy hovering at the top. Errors are explained in plain English (`lib/auth_service.dart`).
+How it works: Firebase signs a person in with one email-style login (the email, or `233241234567@phone.benj.invalid` for phone-only accounts). `api/accounts.py` keeps a private index (`logins/{sha256(kind:value)}` → account) that the app can never read (`firestore.rules`); the service reads it as its own login (`svc-logins@benj.invalid`) and only reveals an account after Firebase checks the password. Deleting an account removes it from the index.
 
-**Privacy page:** based on Ghana's Data Protection Act, 2012 (Act 843) and Firebase's guidance on disclosing what an app collects. It states that registration with the Data Protection Commission will be completed before a public launch; the team must make that true.
+**One-time setup:** run `python -I scripts/setup_service_login.py` once. It creates the service login on Firebase and stores its random password in Vercel as `BENJ_SVC_PASSWORD` (never printed).
 
-**SMS codes are paused.** Firebase only sends SMS on the paid Blaze plan. The code for real SMS verification is still in `AuthService`, ready if the team turns on Blaze or wires a Ghanaian SMS provider instead.
+**SMS codes are paused** (Firebase only sends SMS on the paid Blaze plan); the code for them is still in `AuthService`.
 
-Testing without real accounts: run `firebase emulators:start --project demo-benj --only auth`, then `flutter build web --dart-define=USE_EMULATOR=true`.
+Testing without real accounts: run the Auth and Firestore emulators (`firebase emulators:start --project demo-benj --only auth,firestore`), build with `--dart-define=USE_EMULATOR=true`, and run `scripts/dev_server.py` with `FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8087 BENJ_PROJECT=demo-benj BENJ_SVC_PASSWORD=anything`.
 
 ## Poddy, the mascot
 

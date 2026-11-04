@@ -3,8 +3,8 @@
     flutter build web
     python scripts/dev_server.py        # then open http://localhost:8000
 
-Static files come from build/web; /api/forecast goes to the same Python
-handler Vercel runs, so what works here works on the deployment.
+Static files come from build/web; /api/forecast and /api/accounts go to the same
+Python handlers Vercel runs, so what works here works on the deployment.
 """
 
 import functools
@@ -15,25 +15,36 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "api"))
 
-from forecast import handler as Engine  # noqa: E402
+import accounts  # noqa: E402
+import forecast  # noqa: E402
 
 
 class DevHandler(SimpleHTTPRequestHandler):
     def _api(self):
-        return self.path.startswith("/api/")
+        if self.path.startswith("/api/accounts"):
+            return accounts.handler
+        if self.path.startswith("/api/forecast"):
+            return forecast.handler
+        return None
 
     def do_GET(self):
-        if self._api():
-            return Engine.do_GET(self)
-        return super().do_GET()
+        api = self._api()
+        return api.do_GET(self) if api else super().do_GET()
 
     def do_POST(self):
-        return Engine.do_POST(self)
+        api = self._api()
+        if not api:
+            self.send_error(404)
+            return
+        self._send = api._send.__get__(self)
+        return api.do_POST(self)
 
     def do_OPTIONS(self):
-        return Engine.do_OPTIONS(self)
+        api = self._api()
+        return api.do_OPTIONS(self) if api else super().do_OPTIONS()
 
-    _send = Engine._send
+    def _send(self, status, body):  # replaced per request by the matching API's _send
+        return forecast.handler._send(self, status, body)
 
 
 if __name__ == "__main__":
