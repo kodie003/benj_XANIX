@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../auth_service.dart';
+import '../brand.dart';
 import '../poddy/poddy.dart';
 
 /// Phone first, because the owners we met live on their phones; Google and email are
@@ -84,8 +85,8 @@ class _AuthScreenState extends State<AuthScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Text('benj', textAlign: TextAlign.center, style: text.displaySmall?.copyWith(color: scheme.primary, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 4),
+                const Center(child: BenjLogo(height: 56)),
+                const SizedBox(height: 12),
                 Text('Know what to do with your shop this week.', textAlign: TextAlign.center, style: text.bodyLarge),
                 const SizedBox(height: 12),
                 SizedBox(height: 190, child: PoddyView(mood: _busy ? 'present' : 'hello', flash: 'sad', flashTick: _oops)),
