@@ -102,21 +102,9 @@ class _AuthScreenState extends State<AuthScreen> with _FormRunner {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _password,
-                    obscureText: true,
-                    autofillHints: const [AutofillHints.newPassword],
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(labelText: 'Password', helperText: 'At least 6 characters', border: OutlineInputBorder()),
-                  ),
+                  PasswordField(controller: _password, label: 'Password', helper: 'At least 6 characters', isNew: true),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _confirm,
-                    obscureText: true,
-                    autofillHints: const [AutofillHints.newPassword],
-                    onSubmitted: (_) => busy ? null : _create(),
-                    decoration: const InputDecoration(labelText: 'Repeat password', border: OutlineInputBorder()),
-                  ),
+                  PasswordField(controller: _confirm, label: 'Repeat password', isNew: true, onSubmitted: () => busy ? null : _create()),
                   ConsentTick(value: _consent, onChanged: (v) => setState(() => _consent = v)),
                   const SizedBox(height: 8),
                   FilledButton(
@@ -310,13 +298,7 @@ class _SignInScreenState extends State<SignInScreen> with _FormRunner {
                     decoration: const InputDecoration(labelText: 'Business name, phone or email', hintText: 'e.g. Ama Provisions', border: OutlineInputBorder()),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _password,
-                    obscureText: true,
-                    autofillHints: const [AutofillHints.password],
-                    onSubmitted: (_) => busy ? null : _submit(),
-                    decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
-                  ),
+                  PasswordField(controller: _password, label: 'Password', onSubmitted: () => busy ? null : _submit()),
                   Align(alignment: Alignment.centerRight, child: TextButton(onPressed: busy ? null : _forgot, child: const Text('Forgot password?'))),
                   FilledButton(onPressed: busy ? null : _submit, child: Padding(padding: const EdgeInsets.all(14), child: Text(busy ? 'Please wait…' : 'Sign in'))),
                   const SizedBox(height: 10),
@@ -330,4 +312,40 @@ class _SignInScreenState extends State<SignInScreen> with _FormRunner {
       ),
     );
   }
+}
+
+/// A password box with the little eye to show or hide what was typed.
+class PasswordField extends StatefulWidget {
+  const PasswordField({super.key, required this.controller, required this.label, this.helper, this.isNew = false, this.onSubmitted});
+  final TextEditingController controller;
+  final String label;
+  final String? helper;
+  final bool isNew;
+  final VoidCallback? onSubmitted;
+
+  @override
+  State<PasswordField> createState() => _PasswordFieldState();
+}
+
+class _PasswordFieldState extends State<PasswordField> {
+  bool _show = false;
+
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: widget.controller,
+        obscureText: !_show,
+        autofillHints: [widget.isNew ? AutofillHints.newPassword : AutofillHints.password],
+        textInputAction: widget.onSubmitted == null ? TextInputAction.next : TextInputAction.done,
+        onSubmitted: widget.onSubmitted == null ? null : (_) => widget.onSubmitted!(),
+        decoration: InputDecoration(
+          labelText: widget.label,
+          helperText: widget.helper,
+          border: const OutlineInputBorder(),
+          suffixIcon: IconButton(
+            tooltip: _show ? 'Hide password' : 'Show password',
+            icon: Icon(_show ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+            onPressed: () => setState(() => _show = !_show),
+          ),
+        ),
+      );
 }

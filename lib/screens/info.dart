@@ -91,8 +91,15 @@ const privacySections = <(String, String)>[
         'To keep sign-in safe, Google Firebase may also process technical details such as your IP address and browser.',
   ),
   (
+    'Speaking and photos',
+    'Only when you choose Speak or Photo while adding a product. '
+        'Speech is turned into words by your browser (on Android, Chrome uses Google for this). '
+        'The words, or the photo, are then sent to Google Gemini through Firebase to read the product details. '
+        'benj does not store your voice or your photos; only the product you check and save is kept.',
+  ),
+  (
     'What we do not collect',
-    'No contacts, no location tracking, no photos, no advertising IDs and no analytics trackers. '
+    'No contacts, no location tracking, no advertising IDs and no analytics trackers. We never keep your photos or recordings. '
         'Phone numbers are not checked by SMS yet, and we do not send you SMS.',
   ),
   (

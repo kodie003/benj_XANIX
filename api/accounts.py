@@ -22,6 +22,7 @@ import json
 import os
 import re
 import time
+import traceback
 import unicodedata
 import urllib.error
 import urllib.request
@@ -289,3 +290,6 @@ class handler(BaseHTTPRequestHandler):
             return self._send(e.status, e.body)
         except ValueError:
             return self._send(400, {"error": "bad-json"})
+        except Exception:  # A slow or failed call upstream: answer cleanly, never drop the connection.
+            traceback.print_exc()
+            return self._send(502, {"error": "service"})

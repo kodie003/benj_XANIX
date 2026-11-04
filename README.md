@@ -23,7 +23,7 @@ The app starts empty: no demo shop and no sample data.
 
 | PRD | Feature | Where |
 |---|---|---|
-| F1 | Shop setup: business name at sign-up; products with unit, size, prices; location, phone, restock day in Settings | `screens/auth.dart`, `product_form.dart`, `settings.dart` |
+| F1 | Shop setup: business name at sign-up; products on a full page, **typed, spoken, or from a photo** (label, shelf or stock-book page) read by Gemini into the form for the owner to check; location, phone, restock day in Settings | `screens/auth.dart`, `product_form.dart`, `core/reader.dart`, `settings.dart` |
 | F2 | Quick stock log: +/- per product or a count, one screen, saves offline; seconds per entry recorded | `screens/log.dart` |
 | F3 | Restock entry: quantity and price per product | `screens/log.dart` (Bought) |
 | F4 | Low-stock warning with days left; owner's level or benj's suggestion | `screens/home.dart`, `product.dart` |
@@ -33,7 +33,7 @@ The app starts empty: no demo shop and no sample data.
 | F8 | Stock dashboard: line per product, week/month, sort by name / lowest / fastest, today marked, variant colours | `screens/stock.dart` |
 | F12 | Budget-aware list: most at-risk items first, "cash covers 1 of the 7 you need" | `screens/buy.dart` |
 
-Not built yet: F9 voice, F10 photo, F11 WhatsApp/SMS reminders (the list can be sent to WhatsApp by hand). The **official Ashesi academic calendar** is not pre-loaded: we could not find published dates, so owners add events themselves until the team adds the real dates.
+Voice and photo work for **adding products**: speech is turned into words by the browser (`web/voice.js`), then the words or the photo go to Gemini (`gemini-3.8-flash` via Firebase AI Logic) which returns product details; nothing is saved until the owner checks it. Not built yet: voice and photo for **daily logging** (F9/F10), F11 WhatsApp/SMS reminders (the list can be sent to WhatsApp by hand). The **official Ashesi academic calendar** is not pre-loaded: we could not find published dates, so owners add events themselves until the team adds the real dates.
 
 ## How it works
 

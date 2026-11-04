@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../auth_service.dart';
+import '../brand.dart';
 import '../core/models.dart';
 import '../core/repo.dart';
 import '../poddy/poddy.dart';
@@ -106,7 +107,7 @@ class SettingsScreen extends StatelessWidget {
               child: Card(
                 child: Column(children: [
                   if (account.isNotEmpty) ListTile(leading: const Icon(Icons.person_outline), title: Text('Signed in as $account')),
-                  ListTile(leading: const Icon(Icons.storefront_outlined), title: const Text('About benj'), onTap: () => openInfo(context, about: true)),
+                  ListTile(leading: const BenjMark(size: 26), title: const Text('About benj'), onTap: () => openInfo(context, about: true)),
                   ListTile(leading: const Icon(Icons.privacy_tip_outlined), title: const Text('Privacy'), onTap: () => openInfo(context, about: false)),
                   ListTile(
                     leading: const Icon(Icons.info_outline),
