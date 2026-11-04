@@ -324,7 +324,7 @@ class _PhoneSignInScreenState extends State<PhoneSignInScreen> with _FormRunner 
         const SizedBox(height: 16),
         FilledButton(onPressed: busy ? null : _submit, child: Padding(padding: const EdgeInsets.all(14), child: Text(busy ? 'Please wait…' : 'Sign in'))),
         const SizedBox(height: 8),
-        Text('Forgot your password? Ask the benj team to reset it.', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
+        const SupportLink(prefix: 'Forgot your password? Email ', subject: 'Reset my benj password'),
         const SizedBox(height: 8),
         ...messages(),
       ],
