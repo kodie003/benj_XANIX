@@ -1,47 +1,45 @@
-import '../models.dart';
+import '../core/repo.dart';
 
 export 'peek.dart';
+export 'tour.dart';
 export 'poddy_stub.dart' if (dart.library.js_interop) 'poddy_web.dart';
 
-/// Poddy's mood and one short line, always from the owner's real records.
-({String mood, String line}) poddyMood(AppState state) {
-  if (state.error != null) return (mood: 'sad', line: "Can't reach my notes.");
-  if (state.items.isEmpty) return (mood: 'hello', line: 'Add what you sell!');
-  final actions = List<Map<String, dynamic>>.from(state.insights?['actions'] ?? const []);
-  final rules = actions.map((a) => a['rule']).toSet();
-  if (rules.contains('R1')) return (mood: 'shock', line: "Something's running low!");
-  if (rules.contains('R8')) {
-    final first = state.movements.where((m) => m.type == 'sale').isEmpty;
-    return first ? (mood: 'present', line: "Record today's sales.") : (mood: 'sleep', line: "Record today's sales?");
+/// Poddy's mood and one short line, always from the shop's real records.
+({String mood, String line}) poddyMood(ShopRepo repo) {
+  if (repo.products.isEmpty) return (mood: 'hello', line: 'Add what you sell!');
+  final low = repo.warnings;
+  if (low.isNotEmpty) return (mood: 'shock', line: '${low.first.$1.label} is running low!');
+  if (!repo.loggedToday) {
+    return repo.daysSinceLastLog >= 2 ? (mood: 'sleep', line: "Log today's sales?") : (mood: 'present', line: 'Time to log today.');
   }
-  if (actions.isNotEmpty) return (mood: 'present', line: "Here's your week.");
   return (mood: 'idle', line: 'All good today!');
 }
 
-/// Help Poddy offers on each screen when tapped. Kept to three short tips.
+/// Help Poddy offers on each screen when tapped. Three short tips at most.
 const poddyTips = <String, List<String>>{
   'home': [
-    'Your 3 actions for the week are listed here.',
-    'Tap "I did this" when you have done one.',
-    'Send the weekly message to WhatsApp.',
+    'Red cards are items about to run out.',
+    'Tap "Log today" once a day, it takes seconds.',
+    'Your buying list for the week is below.',
   ],
-  'record': [
-    'Type how many you sold today, then Save.',
-    'Use "Bought / made" when new stock comes in.',
-    'Two minutes every evening is enough.',
+  'log': [
+    'Sold: tap + for each one sold today.',
+    'Count: type how many are on the shelf now.',
+    'Bought: record what you bought at the market.',
   ],
-  'items': [
-    'Add each item with what you pay and what you charge.',
-    'Set when to buy more, so I can warn you.',
-    'Add busy or quiet days, like school breaks.',
+  'buy': [
+    'Type the cash you have to spend.',
+    'Most urgent items come first.',
+    'After buying, record it under Log > Bought.',
   ],
-  'setup': [
-    'Only the business name is needed.',
-    'You can add your items next.',
+  'stock': [
+    'Each line is one product over time.',
+    'Switch between week and month.',
+    'Tap a product to see if benj was right.',
   ],
   'signin': [
+    'New? Create a benj account with your phone number.',
     'Have a Gmail account? Use Google.',
-    'Or use any email with a password.',
   ],
 };
 

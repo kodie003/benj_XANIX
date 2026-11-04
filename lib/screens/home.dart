@@ -1,140 +1,126 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../models.dart';
+import '../core/repo.dart';
+import 'product.dart';
+import 'product_form.dart';
+import 'shell.dart';
+import 'ui.dart';
 
-String cedis(num v) => 'GHS ${v.round()}';
-
-/// "Tell, don't show": numbers on top, then this week's 3 actions, each with why.
+/// PRD Home: low-stock warnings with days left, this week's buying list summary,
+/// and a "log today" button. An answer, not a dashboard.
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, required this.state});
-  final AppState state;
+  const HomeScreen({super.key, required this.repo, required this.shell});
+  final ShopRepo repo;
+  final ShellState shell;
 
   @override
   Widget build(BuildContext context) {
-    final data = state.insights;
-    return RefreshIndicator(
-      onRefresh: state.refresh,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (state.loading) const LinearProgressIndicator(),
-          if (state.error != null) Text(state.error!, style: const TextStyle(color: Colors.red)),
-          if (data != null) ..._content(context, data),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _content(BuildContext context, Map<String, dynamic> data) {
-    final s = data['summary'] as Map<String, dynamic>;
-    final actions = List<Map<String, dynamic>>.from(data['actions']);
-    final more = List<Map<String, dynamic>>.from(data['more']);
-    final lastWeek = (s['last_week_sales'] as num);
-    final change = lastWeek > 0 ? ((s['week_sales'] - lastWeek) / lastWeek * 100).round() : null;
     final text = Theme.of(context).textTheme;
+    final shop = repo.shop!;
+    if (repo.products.isEmpty) {
+      return ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 140), children: [
+        Text(shop.name, style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 16),
+        Empty(
+          icon: Icons.inventory_2_outlined,
+          text: 'Add the products you sell, with how many are on the shelf now. Start with your top 10.',
+          action: 'Add your first product',
+          onAction: () => showProductForm(context, repo),
+        ),
+      ]);
+    }
+    final warnings = repo.warnings;
+    final buying = repo.rows.where((r) => r.$2.suggestedQty > 0).toList()
+      ..sort((a, b) => (a.$2.daysLeft ?? 999).compareTo(b.$2.daysLeft ?? 999));
+    final learning = repo.rows.where((r) => r.$2.learning).length;
+    final week = repo.lastSevenLogged;
 
-    return [
-      Text(data['business'], style: text.titleLarge),
-      const SizedBox(height: 8),
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 140), children: [
       Row(children: [
-        _Stat('Today', cedis(s['today_sales'])),
-        _Stat('Last 7 days', cedis(s['week_sales']), note: change == null ? null : '${change >= 0 ? '+' : ''}$change% vs week before'),
-        _Stat('Profit (est.)', cedis(s['week_profit'])),
+        Expanded(child: Text(shop.name, style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w700))),
+        _SyncChip(repo: repo),
       ]),
-      const SizedBox(height: 20),
-      Text('Do these 3 things this week', style: text.titleMedium),
-      const SizedBox(height: 4),
-      for (final (i, a) in actions.indexed) _ActionCard(number: i + 1, action: a, state: state),
       const SizedBox(height: 12),
-      Wrap(spacing: 8, runSpacing: 8, children: [
+      if (!repo.loggedToday)
         FilledButton.icon(
-          icon: const Icon(Icons.send),
-          label: const Text('Send to WhatsApp'),
-          onPressed: () => launchUrl(Uri.parse('https://wa.me/?text=${Uri.encodeComponent(data['whatsapp'])}')),
+          onPressed: () => shell.go(1),
+          icon: const Icon(Icons.edit_note),
+          label: const Padding(padding: EdgeInsets.all(12), child: Text("Log today's sales")),
+        )
+      else
+        Card(
+          color: Theme.of(context).colorScheme.primaryContainer,
+          child: const ListTile(leading: Icon(Icons.check_circle), title: Text('Logged today. Well done.')),
         ),
-        OutlinedButton.icon(
-          icon: const Icon(Icons.copy),
-          label: const Text('Copy weekly message'),
-          onPressed: () {
-            Clipboard.setData(ClipboardData(text: data['whatsapp']));
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
-          },
-        ),
-      ]),
-      if (more.isNotEmpty)
-        ExpansionTile(
-          tilePadding: EdgeInsets.zero,
-          title: Text('${more.length} more things we noticed'),
-          children: [
-            for (final a in more)
-              ListTile(contentPadding: EdgeInsets.zero, title: Text(a['title']), subtitle: Text(a['why'])),
-          ],
-        ),
-      ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        title: const Text('Preview the weekly WhatsApp message'),
-        children: [SelectableText(data['whatsapp'])],
+      Section(
+        title: warnings.isEmpty ? 'Nothing is running low' : 'Running low',
+        child: warnings.isEmpty
+            ? Text('benj will warn you here before anything runs out.', style: text.bodyMedium)
+            : Column(children: [
+                for (final (p, f) in warnings)
+                  Card(
+                    child: ListTile(
+                      leading: Icon(Icons.warning_amber_rounded, color: urgencyColor(context, f)),
+                      title: Text(p.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text('${units(p, f.stock)} on the shelf${daysLeftText(f) == null ? '' : ' · ${daysLeftText(f)}'}'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => openProduct(context, repo, p),
+                    ),
+                  ),
+              ]),
       ),
-    ];
-  }
-}
-
-class _Stat extends StatelessWidget {
-  const _Stat(this.label, this.value, {this.note});
-  final String label, value;
-  final String? note;
-
-  @override
-  Widget build(BuildContext context) => Expanded(
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(label, style: Theme.of(context).textTheme.labelMedium),
-              Text(value, style: Theme.of(context).textTheme.titleMedium),
-              if (note != null) Text(note!, style: Theme.of(context).textTheme.bodySmall),
-            ]),
-          ),
-        ),
-      );
-}
-
-class _ActionCard extends StatelessWidget {
-  const _ActionCard({required this.number, required this.action, required this.state});
-  final int number;
-  final Map<String, dynamic> action;
-  final AppState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final title = action['title'] as String;
-    final done = state.actedOn.contains(title);
-    final impact = (action['impact'] as num);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            CircleAvatar(radius: 14, child: Text('$number')),
-            const SizedBox(width: 10),
-            Expanded(child: Text(title, style: Theme.of(context).textTheme.titleSmall)),
-          ]),
-          const SizedBox(height: 6),
-          Text('Why: ${action['why']}'),
-          Row(children: [
-            if (impact > 0) Text('About ${cedis(impact)} at stake', style: const TextStyle(fontWeight: FontWeight.bold)),
-            const Spacer(),
-            // FR-E2: did the owner act on it? This is the behaviour we measure.
-            FilterChip(
-              label: Text(done ? 'Done' : 'I did this'),
-              selected: done,
-              onSelected: (_) => state.toggleActed(title),
+      Section(
+        title: 'To buy this week',
+        trailing: TextButton(onPressed: () => shell.go(2), child: const Text('Full list')),
+        child: buying.isEmpty
+            ? Text(learning > 0 ? 'Keep logging for a few days and the list will appear.' : 'You have enough of everything for this week.', style: text.bodyMedium)
+            : Card(
+                child: Column(children: [
+                  for (final (p, f) in buying.take(3))
+                    ListTile(dense: true, leading: const Icon(Icons.shopping_basket_outlined), title: Text(buyLine(p, f.suggestedQty))),
+                  if (buying.length > 3) ListTile(dense: true, title: Text('and ${buying.length - 3} more…'), onTap: () => shell.go(2)),
+                ]),
+              ),
+      ),
+      Section(
+        title: 'Days logged this week',
+        child: Row(children: [
+          for (var i = 0; i < 7; i++)
+            Expanded(
+              child: Container(
+                height: 10,
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: BoxDecoration(
+                  color: week[i] ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
             ),
-          ]),
+          const SizedBox(width: 8),
+          Text('${week.where((d) => d).length} of 7'),
         ]),
       ),
+      if (learning > 0)
+        Padding(
+          padding: const EdgeInsets.only(top: 14),
+          child: Text('Still learning $learning ${learning == 1 ? 'product' : 'products'}: benj needs 3 days of logs before it can forecast.', style: text.bodySmall),
+        ),
+    ]);
+  }
+}
+
+/// Saved on the phone vs synced: owners on bad connections should know their logs are safe.
+class _SyncChip extends StatelessWidget {
+  const _SyncChip({required this.repo});
+  final ShopRepo repo;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = repo.hasPendingWrites;
+    return Chip(
+      avatar: Icon(pending ? Icons.cloud_upload_outlined : Icons.cloud_done_outlined, size: 18),
+      label: Text(pending ? 'Saved on phone' : 'Synced'),
+      visualDensity: VisualDensity.compact,
     );
   }
 }

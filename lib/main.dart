@@ -1,20 +1,19 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'auth_service.dart';
 import 'brand.dart';
+import 'core/models.dart';
+import 'core/repo.dart';
 import 'firebase_options.dart';
-import 'models.dart';
-import 'poddy/poddy.dart';
 import 'screens/auth.dart';
-import 'screens/home.dart';
-import 'screens/items.dart';
-import 'screens/record.dart';
-import 'screens/setup.dart';
+import 'screens/name_shop.dart';
+import 'screens/shell.dart';
 
-/// `flutter build web --dart-define=USE_EMULATOR=true` signs in against the local
-/// Firebase emulators (demo project), so tests never touch real accounts.
+/// `flutter build web --dart-define=USE_EMULATOR=true` uses the local Firebase emulators
+/// (demo project), so tests never touch real accounts or shops.
 const _useEmulator = bool.fromEnvironment('USE_EMULATOR');
 
 Future<void> main() async {
@@ -24,7 +23,12 @@ Future<void> main() async {
         ? const FirebaseOptions(apiKey: 'demo-key', appId: '1:000000000000:web:0', messagingSenderId: '0', projectId: 'demo-benj', authDomain: 'demo-benj.firebaseapp.com')
         : DefaultFirebaseOptions.currentPlatform,
   );
-  if (_useEmulator) await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
+  if (_useEmulator) {
+    await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
+    FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8087);
+  }
+  // Offline first (PRD section 7): every log lands on the phone and syncs when the network returns.
+  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true, cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED);
   runApp(const BenjApp());
 }
 
@@ -42,7 +46,7 @@ class BenjApp extends StatelessWidget {
   }
 }
 
-/// Signed out -> sign in. Signed in -> that account's own records.
+/// Signed out -> sign in. Signed in with no shop yet -> name it. Otherwise -> the app.
 class _Gate extends StatefulWidget {
   const _Gate();
 
@@ -52,14 +56,14 @@ class _Gate extends StatefulWidget {
 
 class _GateState extends State<_Gate> {
   final _auth = AuthService();
-  AppState? _state;
+  ShopRepo? _repo;
 
-  AppState _stateFor(String uid) {
-    if (_state?.uid != uid) {
-      _state?.dispose();
-      _state = AppState(uid)..load();
+  ShopRepo _repoFor(String uid) {
+    if (_repo?.uid != uid) {
+      _repo?.dispose();
+      _repo = ShopRepo(uid);
     }
-    return _state!;
+    return _repo!;
   }
 
   @override
@@ -67,119 +71,31 @@ class _GateState extends State<_Gate> {
     return StreamBuilder<User?>(
       stream: _auth.changes,
       builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const BenjLoading();
-        }
+        if (snap.connectionState == ConnectionState.waiting) return const BenjLoading();
         final user = snap.data;
-        if (user == null) return const AuthScreen();
-        final state = _stateFor(user.uid);
+        if (user == null) {
+          _repo?.dispose();
+          _repo = null;
+          return const AuthScreen();
+        }
+        final repo = _repoFor(user.uid);
         return ListenableBuilder(
-          listenable: state,
+          listenable: repo,
           builder: (context, _) {
-            if (!state.loaded) return const BenjLoading();
-            return state.isSetUp ? Shell(state: state, auth: _auth) : SetupScreen(state: state, onSignOut: _auth.signOut);
+            if (!repo.shopLoaded) return const BenjLoading();
+            if (repo.shop == null) {
+              // Just created an account with a business name: save the shop, then go in.
+              final pending = PendingShop.take();
+              if (pending != null) {
+                repo.saveShop(Shop(name: pending.name, ownerPhone: pending.phone));
+                return const BenjLoading();
+              }
+              return NameShopScreen(repo: repo, user: user, onSignOut: _auth.signOut);
+            }
+            return Shell(repo: repo, auth: _auth);
           },
         );
       },
-    );
-  }
-}
-
-/// Three tabs - the whole product loop: record -> see actions -> act.
-class Shell extends StatefulWidget {
-  const Shell({super.key, required this.state, required this.auth});
-  final AppState state;
-  final AuthService auth;
-
-  @override
-  State<Shell> createState() => _ShellState();
-}
-
-class _ShellState extends State<Shell> {
-  int _tab = 0;
-  bool _welcomed = false;
-
-  /// Poddy peeks from a different side on each tab and says only a few words.
-  Widget _peek(AppState state) {
-    final mood = poddyMood(state);
-    final owner = (state.business?['owner'] as String? ?? '').trim();
-    final noItems = state.items.isEmpty;
-    final (side, lines, tips) = switch (_tab) {
-      0 => (
-          PeekSide.right,
-          [if (!_welcomed) owner.isEmpty ? 'Welcome back!' : 'Welcome back, $owner!', mood.line],
-          poddyTips['home']!,
-        ),
-      1 => (PeekSide.left, [noItems ? 'Add your items first.' : "Type today's numbers."], poddyTips['record']!),
-      _ => (PeekSide.bottom, [noItems ? 'Add your first item.' : 'Keep your prices fresh.'], poddyTips['items']!),
-    };
-    return PoddyPeek(
-      key: ValueKey('peek$_tab'),
-      side: side,
-      mood: _tab == 0 ? mood.mood : (noItems ? 'hello' : 'present'),
-      lines: lines,
-      tips: tips,
-      flashTick: state.savedTick,
-      flashLine: 'Saved. Nice work!',
-      lift: 24,
-    );
-  }
-
-  void _menu(String v) {
-    final state = widget.state;
-    switch (v) {
-      case 'credits':
-        showDialog<void>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Credits'),
-            content: const Text(poddyCredit),
-            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
-          ),
-        );
-      case 'reset':
-        state.reset();
-      case 'signout':
-        widget.auth.signOut();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = widget.state;
-    final who = widget.auth.user;
-    final account = AuthService.accountLabel(who);
-    final pages = [HomeScreen(state: state), RecordScreen(state: state), ItemsScreen(state: state)];
-    return Scaffold(
-      appBar: AppBar(
-        title: const BenjLogo(height: 26),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), tooltip: 'Update my actions', onPressed: state.refresh),
-          PopupMenuButton<String>(
-            onSelected: _menu,
-            itemBuilder: (_) => [
-              if (account.isNotEmpty) PopupMenuItem(enabled: false, child: Text('Signed in as $account')),
-              const PopupMenuItem(value: 'signout', child: Text('Sign out')),
-              const PopupMenuItem(value: 'credits', child: Text('Credits')),
-              const PopupMenuItem(value: 'reset', child: Text('Start over (deletes records)')),
-            ],
-          ),
-        ],
-      ),
-      body: Stack(children: [pages[_tab], _peek(state)]),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        // The welcome is said once; after leaving Home he only gives the news.
-        onDestinationSelected: (i) => setState(() {
-          if (_tab == 0) _welcomed = true;
-          _tab = i;
-        }),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.lightbulb_outline), label: 'This week'),
-          NavigationDestination(icon: Icon(Icons.edit_note), label: 'Record'),
-          NavigationDestination(icon: Icon(Icons.inventory_2_outlined), label: 'Items'),
-        ],
-      ),
     );
   }
 }

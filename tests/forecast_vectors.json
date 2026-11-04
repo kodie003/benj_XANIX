@@ -1,0 +1,68 @@
+[
+  {
+    "name": "steady seller, restock day Monday, today Wednesday",
+    "today": "2026-11-04",
+    "restockDay": 1,
+    "product": { "id": "rice" },
+    "logs": [
+      { "at": "2026-10-28T08:00:00", "type": "count", "quantity": 40 },
+      { "at": "2026-10-28T18:00:00", "type": "sale", "quantity": 4 },
+      { "at": "2026-10-29T18:00:00", "type": "sale", "quantity": 6 },
+      { "at": "2026-10-30T18:00:00", "type": "sale", "quantity": 5 },
+      { "at": "2026-10-31T18:00:00", "type": "sale", "quantity": 5 },
+      { "at": "2026-11-01T18:00:00", "type": "sale", "quantity": 3 },
+      { "at": "2026-11-02T18:00:00", "type": "sale", "quantity": 7 },
+      { "at": "2026-11-03T18:00:00", "type": "sale", "quantity": 5 }
+    ],
+    "events": [],
+    "expect": { "stock": 5, "meanDaily": 5, "sdDaily": 1.291, "daysOfData": 7, "factor": 1, "leadDays": 5, "suggestedWarning": 30, "warningLevel": 30, "isLow": true, "daysLeft": 1, "weekDemand": 35, "suggestedQty": 36 }
+  },
+  {
+    "name": "mid-sem break next week lowers demand by the owner's factor",
+    "today": "2026-11-04",
+    "restockDay": 3,
+    "product": { "id": "noodles", "warningLevel": 3 },
+    "logs": [
+      { "at": "2026-11-01T08:00:00", "type": "restock", "quantity": 60 },
+      { "at": "2026-11-01T18:00:00", "type": "sale", "quantity": 10 },
+      { "at": "2026-11-02T18:00:00", "type": "sale", "quantity": 10 },
+      { "at": "2026-11-03T18:00:00", "type": "sale", "quantity": 10 }
+    ],
+    "events": [{ "start": "2026-11-05", "end": "2026-11-11", "factor": 0.5 }],
+    "expect": { "stock": 30, "meanDaily": 10, "sdDaily": 0, "daysOfData": 3, "factor": 0.5, "leadDays": 7, "suggestedWarning": 35, "warningLevel": 3, "isLow": false, "daysLeft": 6, "weekDemand": 35, "suggestedQty": 5 }
+  },
+  {
+    "name": "a count below expected counts as demand nobody logged",
+    "today": "2026-11-04",
+    "restockDay": null,
+    "product": { "id": "milo" },
+    "logs": [
+      { "at": "2026-11-02T08:00:00", "type": "count", "quantity": 20 },
+      { "at": "2026-11-03T08:00:00", "type": "count", "quantity": 12 }
+    ],
+    "events": [],
+    "expect": { "stock": 12, "meanDaily": 4, "sdDaily": 5.657, "daysOfData": 2, "factor": 1, "leadDays": 7, "suggestedWarning": 53, "warningLevel": 53, "isLow": true, "daysLeft": 3, "weekDemand": 28, "suggestedQty": 41 }
+  },
+  {
+    "name": "sold-out days are not treated as zero demand",
+    "today": "2026-11-04",
+    "restockDay": 1,
+    "product": { "id": "oil" },
+    "logs": [
+      { "at": "2026-10-31T08:00:00", "type": "restock", "quantity": 12 },
+      { "at": "2026-10-31T18:00:00", "type": "sale", "quantity": 6 },
+      { "at": "2026-11-01T18:00:00", "type": "sale", "quantity": 6 }
+    ],
+    "events": [],
+    "expect": { "stock": 0, "meanDaily": 6, "sdDaily": 0, "daysOfData": 2, "factor": 1, "leadDays": 5, "suggestedWarning": 30, "warningLevel": 30, "isLow": true, "daysLeft": 0, "weekDemand": 42, "suggestedQty": 42 }
+  },
+  {
+    "name": "brand-new product: nothing logged, no invented numbers",
+    "today": "2026-11-04",
+    "restockDay": 1,
+    "product": { "id": "new" },
+    "logs": [],
+    "events": [],
+    "expect": { "stock": 0, "meanDaily": 0, "sdDaily": 0, "daysOfData": 0, "factor": 1, "leadDays": 5, "suggestedWarning": 0, "warningLevel": 0, "isLow": false, "daysLeft": null, "weekDemand": 0, "suggestedQty": 0 }
+  }
+]

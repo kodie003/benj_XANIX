@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../auth_service.dart';
 import '../brand.dart';
 import '../poddy/poddy.dart';
+import 'name_shop.dart' show ConsentTick;
 
 /// Sign-in choices: a benj account (phone number + password), Google, or email.
 /// Phone/SMS codes are paused until the team decides how to pay for SMS; the
@@ -43,14 +44,28 @@ class _AuthScreenState extends State<AuthScreen> {
         SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 180),
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 400),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   const Center(child: BenjLogo(height: 64)),
                   const SizedBox(height: 14),
                   Text('Know what to do with your shop this week.', textAlign: TextAlign.center, style: text.bodyLarge),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 8),
+                  // First hello: Poddy hovers here, like on day one, with a short greeting.
+                  const SizedBox(height: 170, child: PoddyView(mood: 'hello')),
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: const [BoxShadow(blurRadius: 8, color: Colors.black12)],
+                      ),
+                      child: Text("Hi! I'm Poddy. Let's get you in.", style: text.titleSmall),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                   FilledButton.icon(
                     onPressed: _busy ? null : () => _open(const PhoneAccountScreen()),
                     icon: const Icon(Icons.phone_android),
@@ -80,7 +95,6 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ),
         ),
-        PoddyPeek(side: PeekSide.right, mood: 'hello', lines: const ["Hi! I'm Poddy.", 'Sign in to start.'], tips: poddyTips['signin']!, lift: 40),
       ]),
     );
   }
@@ -175,10 +189,15 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> with _FormRunne
   final _phone = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
-  bool _create = false;
+  final _business = TextEditingController();
+  bool _create = false, _consent = false;
 
   void _submit() {
     final number = AuthService.normalisePhone(_phone.text);
+    if (_create && _business.text.trim().isEmpty) {
+      setState(() => error = "Type your business name.");
+      return;
+    }
     if (!AuthService.looksValidPhone(number)) {
       setState(() => error = 'Enter your phone number, like 024 123 4567.');
       return;
@@ -191,8 +210,20 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> with _FormRunne
       setState(() => error = "The two passwords don't match.");
       return;
     }
+    if (_create && !_consent) {
+      setState(() => error = 'Please tick the box so benj can keep your stock records.');
+      return;
+    }
+    if (_create) PendingShop.set(_business.text.trim(), phone: number);
     run(
-      () => _create ? _auth.signUpPhonePassword(_phone.text, _password.text) : _auth.signInPhonePassword(_phone.text, _password.text),
+      () async {
+        try {
+          await (_create ? _auth.signUpPhonePassword(_phone.text, _password.text) : _auth.signInPhonePassword(_phone.text, _password.text));
+        } catch (_) {
+          PendingShop.clear();
+          rethrow;
+        }
+      },
       AuthService.friendlyPhone,
       signsIn: true,
     );
@@ -206,6 +237,15 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> with _FormRunne
       busy: busy,
       oops: oops,
       children: [
+        if (_create) ...[
+          TextField(
+            controller: _business,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(labelText: 'Business name', hintText: 'e.g. Ama Provisions', border: OutlineInputBorder()),
+          ),
+          const SizedBox(height: 12),
+        ],
         TextField(
           controller: _phone,
           keyboardType: TextInputType.phone,
@@ -231,6 +271,8 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> with _FormRunne
             onSubmitted: (_) => busy ? null : _submit(),
             decoration: const InputDecoration(labelText: 'Type the password again', border: OutlineInputBorder()),
           ),
+          const SizedBox(height: 4),
+          ConsentTick(value: _consent, onChanged: (v) => setState(() => _consent = v)),
         ],
         const SizedBox(height: 16),
         FilledButton(
@@ -266,11 +308,28 @@ class _EmailSignInScreenState extends State<EmailSignInScreen> with _FormRunner 
   final _auth = AuthService();
   final _email = TextEditingController();
   final _password = TextEditingController();
-  bool _signUp = false;
+  final _business = TextEditingController();
+  bool _signUp = false, _consent = false;
 
   void _submit() {
     final email = _email.text.trim(), pw = _password.text;
-    run(() => _signUp ? _auth.signUpEmail(email, pw) : _auth.signInEmail(email, pw), AuthService.friendly, signsIn: true);
+    if (_signUp && _business.text.trim().isEmpty) {
+      setState(() => error = 'Type your business name.');
+      return;
+    }
+    if (_signUp && !_consent) {
+      setState(() => error = 'Please tick the box so benj can keep your stock records.');
+      return;
+    }
+    if (_signUp) PendingShop.set(_business.text.trim());
+    run(() async {
+      try {
+        await (_signUp ? _auth.signUpEmail(email, pw) : _auth.signInEmail(email, pw));
+      } catch (_) {
+        PendingShop.clear();
+        rethrow;
+      }
+    }, AuthService.friendly, signsIn: true);
   }
 
   void _forgot() {
@@ -292,6 +351,15 @@ class _EmailSignInScreenState extends State<EmailSignInScreen> with _FormRunner 
       busy: busy,
       oops: oops,
       children: [
+        if (_signUp) ...[
+          TextField(
+            controller: _business,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(labelText: 'Business name', hintText: 'e.g. Ama Provisions', border: OutlineInputBorder()),
+          ),
+          const SizedBox(height: 12),
+        ],
         TextField(
           controller: _email,
           keyboardType: TextInputType.emailAddress,
@@ -307,6 +375,7 @@ class _EmailSignInScreenState extends State<EmailSignInScreen> with _FormRunner 
           onSubmitted: (_) => busy ? null : _submit(),
           decoration: InputDecoration(labelText: 'Password', helperText: _signUp ? 'At least 6 characters' : null, border: const OutlineInputBorder()),
         ),
+        if (_signUp) ConsentTick(value: _consent, onChanged: (v) => setState(() => _consent = v)),
         const SizedBox(height: 16),
         FilledButton(
           onPressed: busy ? null : _submit,

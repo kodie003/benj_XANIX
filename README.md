@@ -1,61 +1,53 @@
-# benj — v1 concept MVP
+# benj
 
-**Team Benj · XANIX Challenge 2026 · Opportunity: "The Business That Can't See Itself"**
+**Team benj · XANIX Challenge 2026 · Opportunity: "The Business That Can't See Itself"**
 
-> Your business already tells a story every day. We help you read it — and tell you what to do next.
+> Small shops are not short of records; they are short of foresight. benj turns records into foresight.
+
+benj tells a small shop owner what to restock, how much, and when, before they run out (PRD, `XANIX docs`). Live: https://benj-xanix.vercel.app
 
 ## Who it's for
 
-Owner-run food and provisions businesses near Ashesi (Berekuso) that **tally sales and stock by hand**: the rice seller, the waakye stand, the campus snack shop. Bigger operators with a POS are explicitly out of scope, because they can already see themselves.
-
-## What makes it different
-
-Ghana already has record-keeping tools (SikaBooks, Chopmoney, OZÉ, Bumpa, Kippa). They all give the owner **dashboards**. benj gives **decisions**:
-
-| Typical bookkeeping app | benj |
-|---|---|
-| Charts the owner never opens | **3 plain actions a week**, each with the reason and the cedis at stake |
-| One low-stock alert per item | **One market list** for the next trip: "buy 14 bags rice; 13 bottles oil…" |
-| Doesn't know the calendar | **Knows the owner's rhythm**: the owner adds busy or quiet days (school break, exams), and advice adjusts the week before |
-| Records sales | Spots **waste** (how much was thrown away, in cedis) and **weekday patterns** (which days sell less) |
-| Keeps the owner inside the app | Sends the week as a **WhatsApp message**, ready to share |
-| Assumes the advice works | **"I did this"** on each action measures whether advice changes behaviour (our north-star metric) |
+Small, single-outlet shops near Ashesi selling **countable, non-perishable goods** (bags, packs, cartons, crates): the provision shop, the rice seller, and a cafeteria's packaged items. Supermarkets with a POS, chains and perishables are out of scope for v1.
 
 ## Try it
 
-The app starts empty. There is no demo or sample data; everything you see comes from what the owner enters.
+The app starts empty: no demo shop and no sample data.
 
-1. Name the business.
-2. **Items** tab: add each item with what you pay, what you charge, your reorder level, and how many you have now. Optionally add upcoming busy or quiet days.
-3. **Record** tab: at the end of each day, enter how many were sold, bought/made, or thrown away.
-4. **This week** tab: see the 3 actions, then send them to WhatsApp. Weekday patterns appear after 3 weeks of records.
+1. **Sign in** with a phone number and password (a benj account), Google, or email. Creating an account asks for the business name. Poddy gives a short tour on the first visit.
+2. **Add products** with unit (bag, pack, carton…), size (1 kg, 4.5 kg), how many are on the shelf, and optionally what you pay.
+3. **Log** each day: tap + for each one sold, or type a count, or record what you bought and at what price.
+4. **Home** warns what is running low, with days left. **Buy** gives the week's list ("Buy 2 bags of Rice 4.5 kg"), adjusted for campus events and ranked for the cash you have. **Stock** charts levels over time; tap a product to see forecast vs actual.
+
+## What is built (PRD section 7)
+
+| PRD | Feature | Where |
+|---|---|---|
+| F1 | Shop setup: business name at sign-up; products with unit, size, prices; location, phone, restock day in Settings | `screens/auth.dart`, `product_form.dart`, `settings.dart` |
+| F2 | Quick stock log: +/- per product or a count, one screen, saves offline; seconds per entry recorded | `screens/log.dart` |
+| F3 | Restock entry: quantity and price per product | `screens/log.dart` (Bought) |
+| F4 | Low-stock warning with days left; owner's level or benj's suggestion | `screens/home.dart`, `product.dart` |
+| F5 | Weekly buying list with plain-language lines | `screens/buy.dart` |
+| F6 | Campus calendar: owner-added events with a demand change, shown on the list | `settings.dart`, `buy.dart` |
+| F7 | Forecast vs actual, per product per week, with error | `screens/product.dart` |
+| F8 | Stock dashboard: line per product, week/month, sort by name / lowest / fastest, today marked, variant colours | `screens/stock.dart` |
+| F12 | Budget-aware list: most at-risk items first, "cash covers 1 of the 7 you need" | `screens/buy.dart` |
+
+Not built yet: F9 voice, F10 photo, F11 WhatsApp/SMS reminders (the list can be sent to WhatsApp by hand). The **official Ashesi academic calendar** is not pre-loaded: we could not find published dates, so owners add events themselves until the team adds the real dates.
 
 ## How it works
 
 ```
- Flutter app (on the phone)                     Python insight engine (Vercel function)
- ─────────────────────────                      ──────────────────────────────────────
- Record tab: end-of-day tally   ── records ──▶  api/insights.py
- (sold / bought / thrown away)                   stock on hand, weekly sales & profit
- Items tab: stock + margin                        rules R1–R8 → ranked actions
- This week tab: 3 actions  ◀── 3 actions ───    WhatsApp weekly message
- + WhatsApp share + "I did this"
+ Flutter web app (phone)                          Firebase (project benj-27c66)
+ ─────────────────────────                        ─────────────────────────────
+ Log / Buy / Stock / Settings  ── writes ──▶      Firestore: shops/{uid}/products, stockLogs, events
+ forecast on the phone (offline) ◀── sync ──      (offline cache on the phone; rules: owner only)
+                                  └─ checks ──▶   Python forecast service on Vercel: api/forecast.py
 ```
 
-- **No logins, no database (yet).** Records live on the phone (`shared_preferences`). The engine is stateless: the app sends its records and gets advice back. The owner's data stays the owner's (PRD principle).
-- **Every insight is a one-sentence rule** (PRD §13). No ML until we have weeks of real data.
-
-| Rule | What it looks at | Where |
-|---|---|---|
-| R1/R2 Low stock + run-out forecast | One combined market list, sized to cover a week | `rule_restock` |
-| R3 Top/bottom earners | Which item makes most of the profit, and which loses money | `rule_profit_mix` |
-| R4 Weekday pattern (3+ weeks of data) | Days that sell ≥25% less/more of a fresh item | `rule_weekday` |
-| R5 Margin squeeze | Supplier price rose (from "Bought" entries) → suggested new price | `rule_margin` |
-| R7 Calendar shift | Busy or quiet days the owner entered | `rule_calendar` |
-| R8 Data gap | No tally for 2+ days | `rule_data_gap` |
-| Waste | More than 10% of a fresh item thrown away | `rule_waste` |
-
-Actions are ranked by urgency, then by **cedis at stake**, with at most one per rule. The owner only ever sees 3.
+- **Data model (PRD 9):** `shops/{uid}` (name, location, phone, restock day, consent), `products`, `stockLogs` (type count/sale/restock, quantity, price, input method, seconds taken) and `events` (dates, demand factor). Each owner can only read and write their own shop (`firestore.rules`).
+- **Forecast (PRD 9), the same in Python and Dart:** average daily demand over the last 14 days (sold-out days skipped), times the calendar factor; warning level = d × f × L + 1.65 σ √L, buying quantity = d × f × 7 + 1.65 σ √7 − stock, rounded up. Under 3 days of data, benj says it is still learning. `tests/forecast_vectors.json` checks Python and Dart give the same numbers.
+- **Forecast vs actual (F7)** replays the logs as of each past Monday, so it doubles as the backtest in PRD Test 2.
 
 ## Logo
 
@@ -89,26 +81,25 @@ Poddy **peeks in from the edge** instead of sitting at the top of the page: from
 ## Run locally
 
 ```bash
-python -m unittest discover tests        # engine tests
+python -m pytest tests                    # forecast engine tests
+flutter test                              # Dart forecast, budget and phone tests
 flutter build web                         # (C:\src\flutter\bin\flutter.bat on Joseph's machine)
 python scripts/dev_server.py              # http://localhost:8000  — same routes as Vercel
 ```
 
 ## Deploy (Vercel)
 
-Import the GitHub repo into Vercel. `vercel.json` already configures everything: `scripts/vercel_build.sh` installs Flutter and builds `build/web`, and `api/insights.py` deploys as a Python function. No environment variables are needed.
+Pushes to `main` deploy automatically. `vercel.json` configures everything: `scripts/vercel_build.sh` installs Flutter and builds `build/web`, and `api/forecast.py` deploys as a Python function. No environment variables are needed. Firestore rules deploy with `firebase deploy --only firestore`.
 
 For an Android build later: `flutter build apk --dart-define=API_BASE=https://<your-app>.vercel.app`
 
-## Tunable thresholds
+## Tunable numbers
 
-The only built-in numbers are the rule thresholds at the top of `api/insights.py` (`RUNOUT_DAYS`, `WASTE_SHARE`, `THIN_MARGIN`…). These are the PRD's `[X]` placeholders: tune them from interview evidence.
+The forecast's built-in numbers are at the top of `api/forecast.py` and `lib/core/forecast.dart` (keep them equal): `z = 1.65` (about 95% cover) and a 14-day demand window. The PRD's thresholds (logging 5 of 7 days, forecast within about 20%) are targets to check against real use, not settings.
 
-## Next steps (deliberately not built yet)
+## Next steps (not built yet)
 
-1. Phone-OTP login + cloud database (Firebase/Supabase) so the team can see usage (FR-A1, FR-E1).
-2. Automated weekly WhatsApp send via the Business Cloud API (FR-D2). Today the owner taps "Send to WhatsApp".
-3. Average sales only over days the item was **in stock**. Today a stock-out makes demand look lower than it is.
-4. Physical count vs expected (R6), expenses, payment type (cash / MoMo / credit), credit "who owes me".
-5. Business-type starter item lists (once interviews give us real prices), photo-of-tally-sheet and voice-note entry; Twi labels.
-6. A real offline queue (records already save offline; only the advice needs a network).
+1. Voice (F9) and photo of the stock book (F10) input.
+2. Weekly reminders by WhatsApp or SMS (F11); SMS also needs a paid plan or a Ghanaian SMS provider.
+3. The official Ashesi academic calendar, pre-loaded once the team has the dates.
+4. Multiple users per shop (owner and helper), suppliers and one-tap reorder (PRD P2).
