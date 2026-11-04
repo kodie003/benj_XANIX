@@ -1,11 +1,11 @@
 {
-    "name": "seeyou",
-    "short_name": "seeyou",
+    "name": "benj",
+    "short_name": "benj",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "SeeYou - helps small businesses see themselves",
+    "description": "benj - helps small businesses see what to do next",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

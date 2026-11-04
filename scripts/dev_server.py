@@ -39,5 +39,5 @@ class DevHandler(SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     serve = functools.partial(DevHandler, directory=os.path.join(ROOT, "build", "web"))
-    print(f"SeeYou running at http://localhost:{port}")
+    print(f"benj running at http://localhost:{port}")
     ThreadingHTTPServer(("", port), serve).serve_forever()

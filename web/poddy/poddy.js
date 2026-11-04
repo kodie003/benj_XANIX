@@ -1,4 +1,4 @@
-// Poddy, the SeeYou mascot. 3D model "Poddy M1 - Stylized Floating Robot" by Exmoor beast
+// Poddy, the benj mascot. 3D model "Poddy M1 - Stylized Floating Robot" by Exmoor beast
 // (https://sketchfab.com/Exmoorbeast), CC BY 4.0. Converted from FBX to glTF, textures
 // resized, and its six held poses kept as clips; no geometry was redrawn.
 //
