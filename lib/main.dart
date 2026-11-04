@@ -17,7 +17,11 @@ const _useEmulator = bool.fromEnvironment('USE_EMULATOR');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Emulator runs use a demo project so tests can never touch real shop data.
+  await Firebase.initializeApp(
+      options: _useEmulator
+          ? const FirebaseOptions(apiKey: 'demo-key', appId: '1:000000000000:web:0', messagingSenderId: '0', projectId: 'demo-benj', authDomain: 'demo-benj.firebaseapp.com')
+          : DefaultFirebaseOptions.currentPlatform);
   if (_useEmulator) {
     await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
     FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8087);

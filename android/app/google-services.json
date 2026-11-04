@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "855341144437",
+    "project_id": "benj-27c66",
+    "storage_bucket": "benj-27c66.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:855341144437:android:f6d85a3dca5b218a875b3c",
+        "android_client_info": {
+          "package_name": "com.benj.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCY1Jgd--lCE-8J6qARk5HGQc51XPHmPYE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
