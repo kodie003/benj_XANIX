@@ -57,6 +57,12 @@ The app starts empty. There is no demo or sample data; everything you see comes 
 
 Actions are ranked by urgency, then by **cedis at stake**, with at most one per rule. The owner only ever sees 3.
 
+## Poddy, the mascot
+
+Poddy sits at the top of the Home, Record and setup screens. His mood always comes from the owner's real records (`lib/poddy/poddy.dart`): he waves when there is nothing yet, presents this week's actions, looks shocked when something is running low (rule R1), sleeps when nobody has recorded for days (R8), and celebrates when a tally is saved. He blinks, floats, turns towards your finger and waves when tapped (`web/poddy/poddy.js`). Phones without WebGL simply don't show him.
+
+**Credits (required by the licence):** Poddy is the 3D model ["Poddy M1 - Stylized Floating Robot - Posed"](https://sketchfab.com/3d-models/poddy-m1-stylized-floating-robot-posed-6b5b90dc52ae4933a103d0a71777ecbd) by [Exmoor beast](https://sketchfab.com/Exmoorbeast), licensed under [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/). We converted it from FBX to glTF, resized its textures to 1024 px with the ambient occlusion baked in, and kept its six held poses as clips. Rendered with [three.js](https://threejs.org) 0.185.1 (MIT, see `web/poddy/three/LICENSE`). The same credit is in the app under ⋮ > Credits.
+
 ## Run locally
 
 ```bash

@@ -130,8 +130,12 @@ class AppState extends ChangeNotifier {
     refresh();
   }
 
+  /// Goes up each time the owner records something, so the mascot can react.
+  int savedTick = 0;
+
   Future<void> addMovements(List<Movement> list) async {
     movements.addAll(list);
+    savedTick++;
     await _save();
     notifyListeners();
     refresh();
