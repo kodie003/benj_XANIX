@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../auth_service.dart';
 import '../brand.dart';
+import '../core/countries.dart';
 import '../poddy/poddy.dart';
+import 'info.dart';
 import 'name_shop.dart' show ConsentTick;
 
-/// Sign-in choices: a benj account (phone number + password), Google, or email.
-/// Phone/SMS codes are paused until the team decides how to pay for SMS; the
-/// code for them is still in AuthService.
+/// The first screen is the sign-up form for a benj account: business name, phone
+/// number (Ghana +233 by default, other countries in a dropdown), password twice.
+/// Google and email come after; existing owners tap "Sign in". About and Privacy
+/// sit in the footer. (SMS codes are paused; see AuthService.)
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -15,23 +19,49 @@ class AuthScreen extends StatefulWidget {
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
-class _AuthScreenState extends State<AuthScreen> {
+class _AuthScreenState extends State<AuthScreen> with _FormRunner {
   final _auth = AuthService();
-  bool _busy = false;
-  String? _error;
+  final _business = TextEditingController();
+  final _phone = TextEditingController();
+  final _password = TextEditingController();
+  final _confirm = TextEditingController();
+  Country _country = ghana;
+  bool _consent = false;
 
-  Future<void> _google() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await _auth.signInWithGoogle();
-    } catch (e) {
-      if (mounted) setState(() => _error = AuthService.friendly(e));
+  void _create() {
+    final e164 = _country.toE164(_phone.text);
+    if (_business.text.trim().isEmpty) {
+      setState(() => error = 'Type your business name.');
+      return;
     }
-    if (mounted) setState(() => _busy = false);
+    if (e164 == null) {
+      setState(() => error = phoneError(_country));
+      return;
+    }
+    if (_password.text.length < 6) {
+      setState(() => error = 'Use a password of at least 6 characters.');
+      return;
+    }
+    if (_password.text != _confirm.text) {
+      setState(() => error = "The two passwords don't match.");
+      return;
+    }
+    if (!_consent) {
+      setState(() => error = 'Please tick the box so benj can keep your stock records.');
+      return;
+    }
+    PendingShop.set(_business.text.trim(), phone: e164);
+    run(() async {
+      try {
+        await _auth.signUpPhonePassword(e164, _password.text);
+      } catch (_) {
+        PendingShop.clear();
+        rethrow;
+      }
+    }, AuthService.friendlyPhone, signsIn: true);
   }
+
+  Future<void> _google() => run(_auth.signInWithGoogle, AuthService.friendly);
 
   void _open(Widget screen) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
 
@@ -40,64 +70,140 @@ class _AuthScreenState extends State<AuthScreen> {
     final text = Theme.of(context).textTheme;
     const pad = EdgeInsets.all(14);
     return Scaffold(
-      body: Stack(children: [
-        SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 400),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: AutofillGroup(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  const Center(child: BenjLogo(height: 64)),
-                  const SizedBox(height: 14),
+                  const Center(child: BenjLogo(height: 56)),
+                  const SizedBox(height: 10),
                   Text('Know what to do with your shop this week.', textAlign: TextAlign.center, style: text.bodyLarge),
-                  const SizedBox(height: 8),
                   // First hello: Poddy hovers here, like on day one, with a short greeting.
-                  const SizedBox(height: 170, child: PoddyView(mood: 'hello')),
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: const [BoxShadow(blurRadius: 8, color: Colors.black12)],
-                      ),
-                      child: Text("Hi! I'm Poddy. Let's get you in.", style: text.titleSmall),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: _busy ? null : () => _open(const PhoneAccountScreen()),
-                    icon: const Icon(Icons.phone_android),
-                    label: const Padding(padding: pad, child: Text('Sign in with phone number')),
+                  SizedBox(height: 150, child: PoddyView(mood: busy ? 'present' : 'hello', flash: 'sad', flashTick: oops)),
+                  const Center(child: _Bubble("Hi! I'm Poddy. Let's set up your shop.")),
+                  const SizedBox(height: 18),
+                  Text('Create a benj account', style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _business,
+                    textCapitalization: TextCapitalization.words,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(labelText: 'Business name', hintText: 'e.g. Ama Provisions', border: OutlineInputBorder()),
                   ),
                   const SizedBox(height: 12),
+                  PhoneField(country: _country, controller: _phone, onCountry: (c) => setState(() => _country = c)),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _password,
+                    obscureText: true,
+                    autofillHints: const [AutofillHints.newPassword],
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(labelText: 'Password', helperText: 'At least 6 characters', border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _confirm,
+                    obscureText: true,
+                    autofillHints: const [AutofillHints.newPassword],
+                    onSubmitted: (_) => busy ? null : _create(),
+                    decoration: const InputDecoration(labelText: 'Repeat password', border: OutlineInputBorder()),
+                  ),
+                  ConsentTick(value: _consent, onChanged: (v) => setState(() => _consent = v)),
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    onPressed: busy ? null : _create,
+                    child: Padding(padding: pad, child: Text(busy ? 'Please wait…' : 'Create my account')),
+                  ),
+                  const SizedBox(height: 8),
+                  ...messages(),
+                  const SizedBox(height: 14),
+                  const Row(children: [Expanded(child: Divider()), Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Text('or')), Expanded(child: Divider())]),
+                  const SizedBox(height: 14),
                   OutlinedButton.icon(
-                    onPressed: _busy ? null : _google,
+                    onPressed: busy ? null : _google,
                     icon: const Icon(Icons.account_circle_outlined),
-                    label: Padding(padding: pad, child: Text(_busy ? 'Opening Google…' : 'Continue with Google')),
+                    label: const Padding(padding: pad, child: Text('Continue with Google')),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   OutlinedButton.icon(
-                    onPressed: _busy ? null : () => _open(const EmailSignInScreen()),
+                    onPressed: busy ? null : () => _open(const EmailSignInScreen()),
                     icon: const Icon(Icons.mail_outline),
                     label: const Padding(padding: pad, child: Text('Continue with email')),
                   ),
                   const SizedBox(height: 14),
-                  Text('New to benj? Tap "Sign in with phone number" to create your account.',
-                      textAlign: TextAlign.center, style: text.bodySmall),
-                  if (_error != null) ...[
-                    const SizedBox(height: 14),
-                    Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.error, fontWeight: FontWeight.w600)),
-                  ],
+                  Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                    Text('Already have a benj account?', style: text.bodyMedium),
+                    TextButton(onPressed: () => _open(const PhoneSignInScreen()), child: const Text('Sign in')),
+                  ]),
+                  const SizedBox(height: 18),
+                  const InfoFooter(),
                 ]),
               ),
             ),
           ),
         ),
-      ]),
+      ),
     );
   }
+}
+
+String phoneError(Country c) => c.dropZero
+    ? 'Enter your ${c.name} number: ${c.digits} digits starting with 0, like ${c.hint}.'
+    : 'Enter your ${c.name} number: ${c.digits} digits, like ${c.hint}.';
+
+/// Country dropdown (Ghana first, +233) and the local number, digits only.
+class PhoneField extends StatelessWidget {
+  const PhoneField({super.key, required this.country, required this.controller, required this.onCountry});
+  final Country country;
+  final TextEditingController controller;
+  final ValueChanged<Country> onCountry;
+
+  @override
+  Widget build(BuildContext context) => Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(
+          width: 118,
+          child: DropdownButtonFormField<Country>(
+            initialValue: country,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Country', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 16)),
+            selectedItemBuilder: (_) => [for (final c in countries) Text('${c.flag} +${c.code}')],
+            items: [for (final c in countries) DropdownMenuItem(value: c, child: Text('${c.flag} ${c.name} +${c.code}', overflow: TextOverflow.ellipsis))],
+            onChanged: (c) {
+              if (c != null) onCountry(c);
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            controller: controller,
+            keyboardType: TextInputType.phone,
+            autofillHints: const [AutofillHints.telephoneNumberNational],
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(country.digits)],
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(labelText: 'Phone number', hintText: country.hint, helperText: '${country.digits} digits', border: const OutlineInputBorder()),
+          ),
+        ),
+      ]);
+}
+
+class _Bubble extends StatelessWidget {
+  const _Bubble(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [BoxShadow(blurRadius: 8, color: Colors.black12)],
+        ),
+        child: Text(text, style: Theme.of(context).textTheme.titleSmall),
+      );
 }
 
 /// Poddy hovering above a form, reacting to it: thinking while it works, sad on an error.
@@ -176,119 +282,49 @@ mixin _FormRunner<T extends StatefulWidget> on State<T> {
   }
 }
 
-/// The benj account: phone number and password. No SMS, so nothing to pay for.
-class PhoneAccountScreen extends StatefulWidget {
-  const PhoneAccountScreen({super.key});
+/// Signing back in to a benj account: phone number and password.
+class PhoneSignInScreen extends StatefulWidget {
+  const PhoneSignInScreen({super.key});
 
   @override
-  State<PhoneAccountScreen> createState() => _PhoneAccountScreenState();
+  State<PhoneSignInScreen> createState() => _PhoneSignInScreenState();
 }
 
-class _PhoneAccountScreenState extends State<PhoneAccountScreen> with _FormRunner {
+class _PhoneSignInScreenState extends State<PhoneSignInScreen> with _FormRunner {
   final _auth = AuthService();
   final _phone = TextEditingController();
   final _password = TextEditingController();
-  final _confirm = TextEditingController();
-  final _business = TextEditingController();
-  bool _create = false, _consent = false;
+  Country _country = ghana;
 
   void _submit() {
-    final number = AuthService.normalisePhone(_phone.text);
-    if (_create && _business.text.trim().isEmpty) {
-      setState(() => error = "Type your business name.");
+    final e164 = _country.toE164(_phone.text);
+    if (e164 == null) {
+      setState(() => error = phoneError(_country));
       return;
     }
-    if (!AuthService.looksValidPhone(number)) {
-      setState(() => error = 'Enter your phone number, like 024 123 4567.');
-      return;
-    }
-    if (_password.text.length < 6) {
-      setState(() => error = 'Use a password of at least 6 characters.');
-      return;
-    }
-    if (_create && _password.text != _confirm.text) {
-      setState(() => error = "The two passwords don't match.");
-      return;
-    }
-    if (_create && !_consent) {
-      setState(() => error = 'Please tick the box so benj can keep your stock records.');
-      return;
-    }
-    if (_create) PendingShop.set(_business.text.trim(), phone: number);
-    run(
-      () async {
-        try {
-          await (_create ? _auth.signUpPhonePassword(_phone.text, _password.text) : _auth.signInPhonePassword(_phone.text, _password.text));
-        } catch (_) {
-          PendingShop.clear();
-          rethrow;
-        }
-      },
-      AuthService.friendlyPhone,
-      signsIn: true,
-    );
+    run(() => _auth.signInPhonePassword(e164, _password.text), AuthService.friendlyPhone, signsIn: true);
   }
 
   @override
   Widget build(BuildContext context) {
-    const pad = EdgeInsets.all(14);
     return _FormPage(
-      title: _create ? 'Create a benj account' : 'Sign in with phone',
+      title: 'Sign in',
       busy: busy,
       oops: oops,
       children: [
-        if (_create) ...[
-          TextField(
-            controller: _business,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(labelText: 'Business name', hintText: 'e.g. Ama Provisions', border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 12),
-        ],
-        TextField(
-          controller: _phone,
-          keyboardType: TextInputType.phone,
-          autofillHints: const [AutofillHints.telephoneNumber],
-          textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(labelText: 'Phone number', hintText: '024 123 4567', border: OutlineInputBorder()),
-        ),
+        PhoneField(country: _country, controller: _phone, onCountry: (c) => setState(() => _country = c)),
         const SizedBox(height: 12),
         TextField(
           controller: _password,
           obscureText: true,
-          autofillHints: [_create ? AutofillHints.newPassword : AutofillHints.password],
-          textInputAction: _create ? TextInputAction.next : TextInputAction.done,
-          onSubmitted: (_) => _create || busy ? null : _submit(),
-          decoration: InputDecoration(labelText: 'Password', helperText: _create ? 'At least 6 characters' : null, border: const OutlineInputBorder()),
+          autofillHints: const [AutofillHints.password],
+          onSubmitted: (_) => busy ? null : _submit(),
+          decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
         ),
-        if (_create) ...[
-          const SizedBox(height: 12),
-          TextField(
-            controller: _confirm,
-            obscureText: true,
-            autofillHints: const [AutofillHints.newPassword],
-            onSubmitted: (_) => busy ? null : _submit(),
-            decoration: const InputDecoration(labelText: 'Type the password again', border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 4),
-          ConsentTick(value: _consent, onChanged: (v) => setState(() => _consent = v)),
-        ],
         const SizedBox(height: 16),
-        FilledButton(
-          onPressed: busy ? null : _submit,
-          child: Padding(padding: pad, child: Text(busy ? 'Please wait…' : (_create ? 'Create my account' : 'Sign in'))),
-        ),
-        const SizedBox(height: 4),
-        TextButton(
-          onPressed: () => setState(() {
-            _create = !_create;
-            error = null;
-          }),
-          child: Text(_create ? 'I already have an account' : 'New here? Create a benj account'),
-        ),
-        if (!_create)
-          Text('Forgot your password? Ask the benj team to reset it.', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
+        FilledButton(onPressed: busy ? null : _submit, child: Padding(padding: const EdgeInsets.all(14), child: Text(busy ? 'Please wait…' : 'Sign in'))),
+        const SizedBox(height: 8),
+        Text('Forgot your password? Ask the benj team to reset it.', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 8),
         ...messages(),
       ],

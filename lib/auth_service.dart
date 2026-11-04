@@ -108,11 +108,12 @@ class AuthService {
 
   static String phoneLogin(String e164) => '${e164.replaceAll('+', '')}@$_phoneDomain';
 
-  Future<void> signInPhonePassword(String rawPhone, String password) =>
-      _auth.signInWithEmailAndPassword(email: phoneLogin(normalisePhone(rawPhone)), password: password);
+  /// [e164] comes from the phone field, e.g. +233241234567 (see core/countries.dart).
+  Future<void> signInPhonePassword(String e164, String password) =>
+      _auth.signInWithEmailAndPassword(email: phoneLogin(e164), password: password);
 
-  Future<void> signUpPhonePassword(String rawPhone, String password) =>
-      _auth.createUserWithEmailAndPassword(email: phoneLogin(normalisePhone(rawPhone)), password: password);
+  Future<void> signUpPhonePassword(String e164, String password) =>
+      _auth.createUserWithEmailAndPassword(email: phoneLogin(e164), password: password);
 
   /// What to show as "Signed in as …": the phone number for benj accounts.
   static String accountLabel(User? u) {

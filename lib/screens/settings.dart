@@ -4,6 +4,7 @@ import '../auth_service.dart';
 import '../core/models.dart';
 import '../core/repo.dart';
 import '../poddy/poddy.dart';
+import 'info.dart';
 import 'product.dart';
 import 'product_form.dart';
 import 'ui.dart';
@@ -105,6 +106,8 @@ class SettingsScreen extends StatelessWidget {
               child: Card(
                 child: Column(children: [
                   if (account.isNotEmpty) ListTile(leading: const Icon(Icons.person_outline), title: Text('Signed in as $account')),
+                  ListTile(leading: const Icon(Icons.storefront_outlined), title: const Text('About benj'), onTap: () => openInfo(context, about: true)),
+                  ListTile(leading: const Icon(Icons.privacy_tip_outlined), title: const Text('Privacy'), onTap: () => openInfo(context, about: false)),
                   ListTile(
                     leading: const Icon(Icons.info_outline),
                     title: const Text('Credits'),

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:benj/core/forecast.dart';
 import 'package:benj/core/models.dart';
 import 'package:benj/auth_service.dart';
+import 'package:benj/core/countries.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Product p(String id, String name, {String size = '', String unit = 'bag', double? warn}) => Product(id: id, name: name, unit: unit, size: size, warningLevel: warn);
@@ -63,6 +64,20 @@ void main() {
       expect(AuthService.normalisePhone('233241234567'), '+233241234567');
       expect(AuthService.looksValidPhone('+233241234567'), true);
       expect(AuthService.looksValidPhone('+2332'), false);
+    });
+    test('Ghana: exactly 10 digits starting with 0, then +233', () {
+      expect(ghana.toE164('0241234567'), '+233241234567');
+      expect(ghana.toE164('024 123 4567'), '+233241234567');
+      expect(ghana.toE164('241234567'), isNull); // 9 digits
+      expect(ghana.toE164('02412345678'), isNull); // 11 digits
+      expect(ghana.toE164('1241234567'), isNull); // no leading 0
+    });
+    test('other countries use their own length and code', () {
+      final ng = countries.firstWhere((c) => c.name == 'Nigeria');
+      final us = countries.firstWhere((c) => c.name == 'United States');
+      expect(ng.toE164('08012345678'), '+2348012345678');
+      expect(us.toE164('2015550123'), '+12015550123');
+      expect(us.toE164('201555012'), isNull);
     });
     test('a benj account login is the number at a reserved address', () {
       expect(AuthService.phoneLogin('+233241234567'), '233241234567@phone.benj.invalid');
