@@ -61,12 +61,14 @@ Green is `#1B7A3D`, which also seeds the app's colours. The logo appears on sign
 
 ## Sign-in (Firebase Auth, project benj-27c66)
 
-Owners sign in before they see anything (`lib/screens/auth.dart`), in one of three ways:
-* **A benj account: phone number + password.** Owners type their number the local way (024 123 4567) and pick a password. No SMS is sent, so it costs nothing. Under the hood it is a Firebase email/password account whose id is the number at a reserved address (`233241234567@phone.benj.invalid`, which can never receive mail). The number is not verified, and a forgotten password is reset by a teammate in the Firebase console.
-* **Continue with Google**, one tap.
-* **Email and password**, with "Forgot password" by email.
+The first screen (`lib/screens/auth.dart`) is the **Create a benj account** form: business name, phone number, password, repeat password and a consent tick. Below it: **Continue with Google**, **Continue with email**, "Already have a benj account? **Sign in**", and **About · Privacy** in the footer (`lib/screens/info.dart`, written as plain sections so the team can update them).
+* **Phone numbers:** the country dropdown defaults to Ghana (+233), where the number must be exactly 10 digits starting with 0 (024 123 4567 becomes +233 24 123 4567). Other countries in the dropdown use their own length (`lib/core/countries.dart`).
+* **A benj account** is a Firebase email/password account whose id is the number at a reserved address (`233241234567@phone.benj.invalid`, which can never receive mail). No SMS is sent, so it costs nothing. The number is not verified, and a forgotten password is reset by a teammate in the Firebase console.
+* **Google** is one tap; **email** has its own screen with "Forgot password" by email.
 
-The phone and email forms have a back button and Poddy hovering at the top. Errors are explained in plain English (`lib/auth_service.dart`). Each account's records are kept separately on the phone, so two people sharing a phone never see each other's shop; records kept before sign-in existed move to the first account that signs in.
+The sign-in and email screens have a back button and Poddy hovering at the top. Errors are explained in plain English (`lib/auth_service.dart`).
+
+**Privacy page:** based on Ghana's Data Protection Act, 2012 (Act 843) and Firebase's guidance on disclosing what an app collects. It states that registration with the Data Protection Commission will be completed before a public launch; the team must make that true.
 
 **SMS codes are paused.** Firebase only sends SMS on the paid Blaze plan. The code for real SMS verification is still in `AuthService`, ready if the team turns on Blaze or wires a Ghanaian SMS provider instead.
 
