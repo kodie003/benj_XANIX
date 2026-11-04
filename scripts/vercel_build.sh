@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Vercel has no Flutter in its build image, so fetch the SDK, then build the web app.
-# The Python forecast service in api/ is deployed by Vercel automatically.
+# The Python insight engine in api/ is deployed by Vercel automatically.
 set -euo pipefail
 
 FLUTTER_VERSION="${FLUTTER_VERSION:-3.47.5}"
@@ -18,4 +18,4 @@ export PATH="$FLUTTER_DIR/bin:$PATH"
 flutter config --no-analytics --enable-web >/dev/null
 flutter --version
 flutter pub get
-flutter build web --release --no-web-resources-cdn --pwa-strategy=none
+flutter build web --release
