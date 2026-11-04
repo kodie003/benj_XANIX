@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'auth_service.dart';
+import 'brand.dart';
 import 'firebase_options.dart';
 import 'models.dart';
 import 'poddy/poddy.dart';
@@ -35,7 +36,7 @@ class BenjApp extends StatelessWidget {
     return MaterialApp(
       title: 'benj',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: const Color(0xFF1B7F4B)),
+      theme: ThemeData(colorSchemeSeed: benjGreen),
       home: const _Gate(),
     );
   }
@@ -67,7 +68,7 @@ class _GateState extends State<_Gate> {
       stream: _auth.changes,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const BenjLoading();
         }
         final user = snap.data;
         if (user == null) return const AuthScreen();
@@ -75,7 +76,7 @@ class _GateState extends State<_Gate> {
         return ListenableBuilder(
           listenable: state,
           builder: (context, _) {
-            if (!state.loaded) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+            if (!state.loaded) return const BenjLoading();
             return state.isSetUp ? Shell(state: state, auth: _auth) : SetupScreen(state: state, onSignOut: _auth.signOut);
           },
         );
@@ -124,7 +125,7 @@ class _ShellState extends State<Shell> {
     final pages = [HomeScreen(state: state), RecordScreen(state: state), ItemsScreen(state: state)];
     return Scaffold(
       appBar: AppBar(
-        title: const Text('benj'),
+        title: const BenjLogo(height: 26),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), tooltip: 'Update my actions', onPressed: state.refresh),
           PopupMenuButton<String>(

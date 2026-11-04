@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../brand.dart';
 import '../models.dart';
 import '../poddy/poddy.dart';
 
@@ -30,7 +31,7 @@ class _SetupScreenState extends State<SetupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('benj'),
+        title: const BenjLogo(height: 26),
         actions: [if (widget.onSignOut != null) TextButton(onPressed: widget.onSignOut, child: const Text('Sign out'))],
       ),
       body: ListView(

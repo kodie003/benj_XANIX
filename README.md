@@ -57,6 +57,10 @@ The app starts empty. There is no demo or sample data; everything you see comes 
 
 Actions are ranked by urgency, then by **cedis at stake**, with at most one per rule. The owner only ever sees 3.
 
+## Logo
+
+`assets/brand/logo.svg` (full) and `assets/brand/mark.svg` (the b tile) are drawn from **Poppins Bold** outlines (SIL Open Font License, so it can be used in a logo). The white b in the tile and the e, n, j beside it are the same letters at the same size, so stroke weight and height always match; the tile is square, centred on the b, and its bottom edge lines up with the j. Green is `#1B7A3D`, which also seeds the app's colours. It appears on sign-in, in the top bar, on the loading screen, as the browser-tab icon, the home-screen install icon (including a crop-safe version) and the Android launcher icon. The generator scripts and source files are in the team's docs folder (`logo/final`).
+
 ## Sign-in (Firebase Auth, project benj-27c66)
 
 Owners sign in before they see anything: **phone number** (SMS code) first, with **Google** and **email/password** one tap away. Errors are explained in plain English (`lib/auth_service.dart`, `lib/screens/auth.dart`). Each account's records are kept separately on the phone, so two people sharing a phone never see each other's shop; records kept before sign-in existed move to the first account that signs in.
