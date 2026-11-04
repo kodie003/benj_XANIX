@@ -62,7 +62,8 @@ Actions are ranked by urgency, then by **cedis at stake**, with at most one per 
 The **b is a magnifying glass**: a stem, a lens and a handle, because benj helps owners look closely at their shop. `assets/brand/logo.svg` (full) and `assets/brand/mark.svg` (the b tile) are generated, not hand-drawn, so they stay proportional:
 * the lens is exactly as tall as the letter o, so it lines up with **e, n, j** (Poppins Bold, SIL Open Font License);
 * the white strokes are slightly thinner than Poppins Bold's, because white on green reads heavier; the result looks the same weight as "enj";
-* the tile is square, the b is optically centred in it, and the tile's bottom edge lines up with the j.
+* in the full logo the tile also covers the left half of the **e**: the part inside the tile is white, the part outside is green, so the b tile flows into "enj". The cut falls at the e's middle bar, and the tile's bottom edge lines up with the j;
+* the app icon and browser-tab icon use the square b tile on its own, with the b optically centred.
 
 Green is `#1B7A3D`, which also seeds the app's colours. The logo appears on sign-in, in the top bar, on the loading screen, as the browser-tab icon, the install icon (with a crop-safe version for round launchers) and the Android launcher icon. Source, generator script and font are in the team's docs folder (`logo/final`).
 
