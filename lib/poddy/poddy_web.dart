@@ -61,7 +61,7 @@ class _PoddyViewState extends State<PoddyView> {
     // Old phones without WebGL simply don't get a mascot; nothing else depends on him.
     if (!_supported) return const SizedBox.shrink();
     return Semantics(
-      label: 'Poddy, the SeeYou helper',
+      label: 'Poddy, the benj helper',
       child: HtmlElementView.fromTagName(
         tagName: 'div',
         onElementCreated: (Object el) {

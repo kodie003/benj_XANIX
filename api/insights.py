@@ -1,4 +1,4 @@
-"""SeeYou insight engine - turns a small business's daily tally into 3 plain actions.
+"""benj insight engine - turns a small business's daily tally into 3 plain actions.
 
 This is the heart of the product (PRD section 13). Every insight is a rule we
 can explain in one sentence; no machine learning until we have weeks of data.
@@ -411,7 +411,7 @@ class handler(BaseHTTPRequestHandler):
         self._send(204, {})
 
     def do_GET(self):
-        self._send(200, {"ok": True, "engine": "SeeYou insights", "usage": "POST your records here"})
+        self._send(200, {"ok": True, "engine": "benj insights", "usage": "POST your records here"})
 
     def do_POST(self):
         try:

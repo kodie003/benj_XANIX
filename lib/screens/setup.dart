@@ -5,8 +5,9 @@ import '../poddy/poddy.dart';
 
 /// Onboarding: just name the business. Items are added by the owner on the Items tab.
 class SetupScreen extends StatefulWidget {
-  const SetupScreen({super.key, required this.state});
+  const SetupScreen({super.key, required this.state, this.onSignOut});
   final AppState state;
+  final VoidCallback? onSignOut;
 
   @override
   State<SetupScreen> createState() => _SetupScreenState();
@@ -28,7 +29,10 @@ class _SetupScreenState extends State<SetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('SeeYou')),
+      appBar: AppBar(
+        title: const Text('benj'),
+        actions: [if (widget.onSignOut != null) TextButton(onPressed: widget.onSignOut, child: const Text('Sign out'))],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -38,7 +42,7 @@ class _SetupScreenState extends State<SetupScreen> {
           const SizedBox(height: 8),
           const Text(
             'Write down what you sell at the end of the day - like your tally book. '
-            'Every week SeeYou tells you 3 things to do: what to buy, what to make less of, and what to re-price.',
+            'Every week benj tells you 3 things to do: what to buy, what to make less of, and what to re-price.',
           ),
           const SizedBox(height: 16),
           TextField(controller: _name, decoration: const InputDecoration(labelText: 'Business name')),

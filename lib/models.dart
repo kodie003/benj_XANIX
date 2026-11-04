@@ -76,9 +76,20 @@ class Movement {
 
 String isoDay(DateTime d) => d.toIso8601String().substring(0, 10);
 
-/// The whole business lives on the phone (no logins, no database yet).
+/// The business lives on the phone, kept separately for each signed-in account.
 class AppState extends ChangeNotifier {
-  static const _key = 'seeyou_v1';
+  AppState(this.uid);
+
+  /// Firebase account id. Records are saved under it, so two people sharing a
+  /// phone never see each other's shop.
+  final String uid;
+  String get _key => 'benj_v1_$uid';
+
+  /// Records kept before sign-in existed. The first account to sign in on this
+  /// phone takes them over, so nobody loses their tally.
+  static const _legacyKey = 'seeyou_v1';
+
+  bool loaded = false;
 
   Map<String, dynamic>? business; // {name, owner, type}
   List<Item> items = [];
@@ -96,8 +107,15 @@ class AppState extends ChangeNotifier {
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key);
+    var raw = prefs.getString(_key);
+    final legacy = prefs.getString(_legacyKey);
+    if (raw == null && legacy != null) {
+      raw = legacy;
+      await prefs.setString(_key, legacy);
+      await prefs.remove(_legacyKey);
+    }
     if (raw != null) _fromJson(jsonDecode(raw));
+    loaded = true;
     notifyListeners();
     if (isSetUp) refresh();
   }

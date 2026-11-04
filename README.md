@@ -1,4 +1,4 @@
-# SeeYou — v1 concept MVP
+# benj — v1 concept MVP
 
 **Team Benj · XANIX Challenge 2026 · Opportunity: "The Business That Can't See Itself"**
 
@@ -10,9 +10,9 @@ Owner-run food and provisions businesses near Ashesi (Berekuso) that **tally sal
 
 ## What makes it different
 
-Ghana already has record-keeping tools (SikaBooks, Chopmoney, OZÉ, Bumpa, Kippa). They all give the owner **dashboards**. SeeYou gives **decisions**:
+Ghana already has record-keeping tools (SikaBooks, Chopmoney, OZÉ, Bumpa, Kippa). They all give the owner **dashboards**. benj gives **decisions**:
 
-| Typical bookkeeping app | SeeYou |
+| Typical bookkeeping app | benj |
 |---|---|
 | Charts the owner never opens | **3 plain actions a week**, each with the reason and the cedis at stake |
 | One low-stock alert per item | **One market list** for the next trip: "buy 14 bags rice; 13 bottles oil…" |
@@ -56,6 +56,14 @@ The app starts empty. There is no demo or sample data; everything you see comes 
 | Waste | More than 10% of a fresh item thrown away | `rule_waste` |
 
 Actions are ranked by urgency, then by **cedis at stake**, with at most one per rule. The owner only ever sees 3.
+
+## Sign-in (Firebase Auth, project benj-27c66)
+
+Owners sign in before they see anything: **phone number** (SMS code) first, with **Google** and **email/password** one tap away. Errors are explained in plain English (`lib/auth_service.dart`, `lib/screens/auth.dart`). Each account's records are kept separately on the phone, so two people sharing a phone never see each other's shop; records kept before sign-in existed move to the first account that signs in.
+
+Phone sign-in sends real SMS only once the Firebase project is on the Blaze plan. Until then, use Google or email (the app says so if a code can't be sent). SMS is limited to Ghanaian numbers, and `benj-xanix.vercel.app` is an authorised sign-in domain.
+
+Testing without real accounts: run `firebase emulators:start --project demo-benj --only auth`, then `flutter build web --dart-define=USE_EMULATOR=true`.
 
 ## Poddy, the mascot
 

@@ -1,5 +1,5 @@
-name: seeyou
-description: "SeeYou - helps small businesses see themselves"
+name: benj
+description: "benj - helps small businesses see what to do next"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -38,6 +38,8 @@ dependencies:
   shared_preferences: ^2.5.6
   url_launcher: ^6.3.3
   firebase_core: ^5.1.0
+  firebase_auth: ^7.0.1
+  google_sign_in: ^7.2.0
 
 dev_dependencies:
   flutter_test:

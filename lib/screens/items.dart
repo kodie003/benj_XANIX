@@ -43,7 +43,7 @@ class ItemsScreen extends StatelessWidget {
                 '${(e['effect'] as num) < 0 ? 'fewer' : 'more'} customers'),
             trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => state.removeEvent(e)),
           ),
-        if (state.events.isEmpty) const Text('e.g. school break, exams, a festival. SeeYou adjusts your advice the week before.'),
+        if (state.events.isEmpty) const Text('e.g. school break, exams, a festival. benj adjusts your advice the week before.'),
         const SizedBox(height: 8),
         OutlinedButton.icon(
           icon: const Icon(Icons.event),
