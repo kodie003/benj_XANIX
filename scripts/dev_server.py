@@ -3,7 +3,7 @@
     flutter build web
     python scripts/dev_server.py        # then open http://localhost:8000
 
-Static files come from build/web; /api/insights goes to the same Python
+Static files come from build/web; /api/forecast goes to the same Python
 handler Vercel runs, so what works here works on the deployment.
 """
 
@@ -15,25 +15,25 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "api"))
 
-from insights import handler as InsightsHandler  # noqa: E402
+from forecast import handler as Engine  # noqa: E402
 
 
 class DevHandler(SimpleHTTPRequestHandler):
     def _api(self):
-        return self.path.startswith("/api/insights")
+        return self.path.startswith("/api/")
 
     def do_GET(self):
         if self._api():
-            return InsightsHandler.do_GET(self)
+            return Engine.do_GET(self)
         return super().do_GET()
 
     def do_POST(self):
-        return InsightsHandler.do_POST(self)
+        return Engine.do_POST(self)
 
     def do_OPTIONS(self):
-        return InsightsHandler.do_OPTIONS(self)
+        return Engine.do_OPTIONS(self)
 
-    _send = InsightsHandler._send
+    _send = Engine._send
 
 
 if __name__ == "__main__":

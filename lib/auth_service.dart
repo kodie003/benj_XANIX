@@ -8,6 +8,20 @@ import 'package:google_sign_in/google_sign_in.dart';
 ///  * Web: Firebase runs an invisible reCAPTCHA, then Google texts the code to the phone.
 ///  * Android: Firebase checks the app is genuine, texts the code, and may read it
 ///    automatically, so the owner sometimes never has to type it.
+/// The business name typed while creating an account, held until the account exists
+/// and the shop can be saved under it.
+class PendingShop {
+  static ({String name, String phone})? _value;
+  static void set(String name, {String phone = ''}) => _value = (name: name, phone: phone);
+  static ({String name, String phone})? take() {
+    final v = _value;
+    _value = null;
+    return v;
+  }
+
+  static void clear() => _value = null;
+}
+
 class AuthService {
   final _auth = FirebaseAuth.instance;
   static bool _googleReady = false;
@@ -122,6 +136,17 @@ class AuthService {
       }
     }
     return friendly(e);
+  }
+
+  /// Firebase only lets an account be deleted soon after signing in.
+  bool get signedInRecently {
+    final at = _auth.currentUser?.metadata.lastSignInTime;
+    return at != null && DateTime.now().difference(at) < const Duration(minutes: 4);
+  }
+
+  Future<void> deleteAccount() async {
+    if (!kIsWeb && _googleReady) await GoogleSignIn.instance.signOut();
+    await _auth.currentUser?.delete();
   }
 
   Future<void> signOut() async {
