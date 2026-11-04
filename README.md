@@ -69,9 +69,14 @@ Green is `#1B7A3D`, which also seeds the app's colours. The logo appears on sign
 
 ## Sign-in (Firebase Auth, project benj-27c66)
 
-Owners sign in before they see anything, with one tap on **Continue with Google** or with **email and password** on its own screen (with a back button; `lib/screens/auth.dart`). Errors are explained in plain English (`lib/auth_service.dart`). Each account's records are kept separately on the phone, so two people sharing a phone never see each other's shop; records kept before sign-in existed move to the first account that signs in.
+Owners sign in before they see anything (`lib/screens/auth.dart`), in one of three ways:
+* **A benj account: phone number + password.** Owners type their number the local way (024 123 4567) and pick a password. No SMS is sent, so it costs nothing. Under the hood it is a Firebase email/password account whose id is the number at a reserved address (`233241234567@phone.benj.invalid`, which can never receive mail). The number is not verified, and a forgotten password is reset by a teammate in the Firebase console.
+* **Continue with Google**, one tap.
+* **Email and password**, with "Forgot password" by email.
 
-**Phone/SMS sign-in is paused.** Firebase only sends SMS codes on the paid Blaze plan, so for now there is no phone option on screen. The code for it is still in `AuthService` (phone number formatting for Ghana, sending and checking the code), ready if the team turns on Blaze or wires a Ghanaian SMS provider instead.
+The phone and email forms have a back button and Poddy hovering at the top. Errors are explained in plain English (`lib/auth_service.dart`). Each account's records are kept separately on the phone, so two people sharing a phone never see each other's shop; records kept before sign-in existed move to the first account that signs in.
+
+**SMS codes are paused.** Firebase only sends SMS on the paid Blaze plan. The code for real SMS verification is still in `AuthService`, ready if the team turns on Blaze or wires a Ghanaian SMS provider instead.
 
 Testing without real accounts: run `firebase emulators:start --project demo-benj --only auth`, then `flutter build web --dart-define=USE_EMULATOR=true`.
 

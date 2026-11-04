@@ -148,7 +148,7 @@ class _ShellState extends State<Shell> {
   Widget build(BuildContext context) {
     final state = widget.state;
     final who = widget.auth.user;
-    final account = who?.email ?? who?.phoneNumber ?? '';
+    final account = AuthService.accountLabel(who);
     final pages = [HomeScreen(state: state), RecordScreen(state: state), ItemsScreen(state: state)];
     return Scaffold(
       appBar: AppBar(

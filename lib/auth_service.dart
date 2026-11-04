@@ -86,6 +86,44 @@ class AuthService {
   Future<void> signUpEmail(String email, String password) => _auth.createUserWithEmailAndPassword(email: email, password: password);
   Future<void> resetPassword(String email) => _auth.sendPasswordResetEmail(email: email);
 
+  // ---- benj account: phone number + password, no SMS ----
+  // Firebase's password sign-in needs an email-shaped id, so the number is stored as
+  // 233241234567@phone.benj.invalid. ".invalid" is reserved and can never receive mail,
+  // so nothing is ever sent to it. The number itself is not verified.
+  static const _phoneDomain = 'phone.benj.invalid';
+
+  static String phoneLogin(String e164) => '${e164.replaceAll('+', '')}@$_phoneDomain';
+
+  Future<void> signInPhonePassword(String rawPhone, String password) =>
+      _auth.signInWithEmailAndPassword(email: phoneLogin(normalisePhone(rawPhone)), password: password);
+
+  Future<void> signUpPhonePassword(String rawPhone, String password) =>
+      _auth.createUserWithEmailAndPassword(email: phoneLogin(normalisePhone(rawPhone)), password: password);
+
+  /// What to show as "Signed in as …": the phone number for benj accounts.
+  static String accountLabel(User? u) {
+    final email = u?.email ?? '';
+    if (email.endsWith('@$_phoneDomain')) return '+${email.split('@').first}';
+    return email.isNotEmpty ? email : (u?.phoneNumber ?? '');
+  }
+
+  /// Same as [friendly], but talks about the phone number instead of an email.
+  static String friendlyPhone(Object e) {
+    if (e is FirebaseAuthException) {
+      switch (e.code) {
+        case 'email-already-in-use':
+          return 'That number already has a benj account. Try signing in.';
+        case 'wrong-password':
+        case 'user-not-found':
+        case 'invalid-credential':
+          return 'That number or password isn\'t right.';
+        case 'invalid-email':
+          return 'That number doesn\'t look right. Try it like 024 123 4567.';
+      }
+    }
+    return friendly(e);
+  }
+
   Future<void> signOut() async {
     if (!kIsWeb && _googleReady) await GoogleSignIn.instance.signOut();
     await _auth.signOut();

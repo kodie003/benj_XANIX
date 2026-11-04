@@ -44,7 +44,7 @@ class PoddyPeek extends StatefulWidget {
 }
 
 class _PoddyPeekState extends State<PoddyPeek> {
-  static const _w = 116.0, _h = 150.0;
+  static const _w = 136.0, _h = 176.0;
   bool _out = false;
   String? _line;
   bool _asking = false;
@@ -137,7 +137,8 @@ class _PoddyPeekState extends State<PoddyPeek> {
   @override
   Widget build(BuildContext context) {
     // How much of him is visible: leaning in, or just his head at the edge.
-    final shown = _out ? 0.72 : 0.42;
+    // Tucked away, his whole face still shows so owners know he's there to tap.
+    final shown = _out ? 0.8 : 0.6;
     const dur = Duration(milliseconds: 520);
     const curve = Curves.easeOutBack;
     final poddy = SizedBox(width: _w, height: _h, child: PoddyView(mood: widget.mood, flash: 'welcome', flashTick: widget.flashTick, onTap: _tapped));
