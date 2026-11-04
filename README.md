@@ -59,25 +59,25 @@ Actions are ranked by urgency, then by **cedis at stake**, with at most one per 
 
 ## Logo
 
-The **b is a magnifying glass**: a stem, a lens and a handle, because benj helps owners look closely at their shop. `assets/brand/logo.svg` (full) and `assets/brand/mark.svg` (the b tile) are generated, not hand-drawn, so they stay proportional:
+The **b's bowl is a lens** (a round glass with a glint), because benj helps owners see their shop clearly. `assets/brand/logo.svg` (full) and `assets/brand/mark.svg` (the b tile) are generated, not hand-drawn, so they stay proportional:
 * the lens is exactly as tall as the letter o, so it lines up with **e, n, j** (Poppins Bold, SIL Open Font License);
 * the white strokes are slightly thinner than Poppins Bold's, because white on green reads heavier; the result looks the same weight as "enj";
-* in the full logo the tile also covers the left 30% of the **e**: that part is white and the other 70% is green, so the b tile flows into "enj". The tile's bottom edge lines up with the j;
+* in the full logo the tile also covers the left 25% of the **e**: that part is white and the other 75% is green, so the b tile flows into "enj". The tile's bottom edge lines up with the j;
 * the app icon and browser-tab icon use the square b tile on its own, with the b optically centred.
 
 Green is `#1B7A3D`, which also seeds the app's colours. The logo appears on sign-in, in the top bar, on the loading screen, as the browser-tab icon, the install icon (with a crop-safe version for round launchers) and the Android launcher icon. Source, generator script and font are in the team's docs folder (`logo/final`).
 
 ## Sign-in (Firebase Auth, project benj-27c66)
 
-Owners sign in before they see anything: **phone number** (SMS code) first, with **Google** and **email/password** one tap away. Errors are explained in plain English (`lib/auth_service.dart`, `lib/screens/auth.dart`). Each account's records are kept separately on the phone, so two people sharing a phone never see each other's shop; records kept before sign-in existed move to the first account that signs in.
+Owners sign in before they see anything, with one tap on **Continue with Google** or with **email and password** on its own screen (with a back button; `lib/screens/auth.dart`). Errors are explained in plain English (`lib/auth_service.dart`). Each account's records are kept separately on the phone, so two people sharing a phone never see each other's shop; records kept before sign-in existed move to the first account that signs in.
 
-Phone sign-in sends real SMS only once the Firebase project is on the Blaze plan. Until then, use Google or email (the app says so if a code can't be sent). SMS is limited to Ghanaian numbers, and `benj-xanix.vercel.app` is an authorised sign-in domain.
+**Phone/SMS sign-in is paused.** Firebase only sends SMS codes on the paid Blaze plan, so for now there is no phone option on screen. The code for it is still in `AuthService` (phone number formatting for Ghana, sending and checking the code), ready if the team turns on Blaze or wires a Ghanaian SMS provider instead.
 
 Testing without real accounts: run `firebase emulators:start --project demo-benj --only auth`, then `flutter build web --dart-define=USE_EMULATOR=true`.
 
 ## Poddy, the mascot
 
-Poddy sits at the top of the Home, Record and setup screens. His mood always comes from the owner's real records (`lib/poddy/poddy.dart`): he waves when there is nothing yet, presents this week's actions, looks shocked when something is running low (rule R1), sleeps when nobody has recorded for days (R8), and celebrates when a tally is saved. He blinks, floats, turns towards your finger and waves when tapped (`web/poddy/poddy.js`). Phones without WebGL simply don't show him.
+Poddy **peeks in from the edge** instead of sitting at the top of the page: from the right on sign-in and Home, from the left on setup and Record, and up from the bottom on Items (`lib/poddy/peek.dart`). He says one short line, a few words at most, then ducks back so only his head shows. His line and mood always come from the owner's records (`lib/poddy/poddy.dart`): "Welcome back, Ama!", "Something's running low!", "Record today's sales?", "Saved. Nice work!". Tap him and he asks "Need help?" with three quick tips for that screen. He blinks, floats and turns towards your finger (`web/poddy/poddy.js`). Phones without WebGL simply don't show him.
 
 **Credits (required by the licence):** Poddy is the 3D model ["Poddy M1 - Stylized Floating Robot - Posed"](https://sketchfab.com/3d-models/poddy-m1-stylized-floating-robot-posed-6b5b90dc52ae4933a103d0a71777ecbd) by [Exmoor beast](https://sketchfab.com/Exmoorbeast), licensed under [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/). We converted it from FBX to glTF, resized its textures to 1024 px with the ambient occlusion baked in, and kept its six held poses as clips. Rendered with [three.js](https://threejs.org) 0.185.1 (MIT, see `web/poddy/three/LICENSE`). The same credit is in the app under ⋮ > Credits.
 
