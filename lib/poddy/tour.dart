@@ -76,6 +76,7 @@ class _PoddyTourState extends State<PoddyTour> {
                 Row(children: [
                   Text('${_i + 1} of ${widget.steps.length}', style: Theme.of(context).textTheme.labelSmall),
                   const Spacer(),
+                  if (_i > 0) TextButton(onPressed: () => setState(() => _i--), child: const Text('Back')),
                   if (!last) TextButton(onPressed: widget.onDone, child: const Text('Skip')),
                   FilledButton(onPressed: _next, child: Text(last ? "Let's go" : 'Next')),
                 ]),
