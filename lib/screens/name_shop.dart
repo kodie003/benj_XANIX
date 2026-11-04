@@ -33,9 +33,18 @@ class _NameShopScreenState extends State<NameShopScreen> {
       setState(() => _error = 'Please tick the box so benj can keep your stock records.');
       return;
     }
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     final phone = AuthService.accountLabel(widget.user);
-    await widget.repo.saveShop(Shop(name: _name.text.trim(), ownerPhone: phone.startsWith('+') ? phone : ''));
+    try {
+      // Business names are unique on benj, so owners can sign in with them.
+      await AuthService().registerNames(business: _name.text.trim());
+      await widget.repo.saveShop(Shop(name: _name.text.trim(), ownerPhone: phone.startsWith('+') ? phone : ''));
+    } catch (e) {
+      if (mounted) setState(() => _error = AuthService.friendly(e));
+    }
     if (mounted) setState(() => _busy = false);
   }
 

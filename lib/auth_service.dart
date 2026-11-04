@@ -1,8 +1,10 @@
 ﻿import 'dart:async';
+import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
 
 /// Email and password, Google, and phone. Web and Android differ under the hood:
 ///  * Web: Firebase runs an invisible reCAPTCHA, then Google texts the code to the phone.
@@ -22,12 +24,89 @@ class PendingShop {
   static void clear() => _value = null;
 }
 
+/// A failure from benj's account service, with a code [AuthService.friendly] explains.
+class BenjAuthError implements Exception {
+  BenjAuthError(this.code);
+  final String code; // business-taken, phone-taken, wrong, service, too-many-requests
+  @override
+  String toString() => 'BenjAuthError($code)';
+}
+
 class AuthService {
   final _auth = FirebaseAuth.instance;
   static bool _googleReady = false;
 
   Stream<User?> get changes => _auth.authStateChanges();
   User? get user => _auth.currentUser;
+
+  // ---- benj accounts: sign in with business name, phone or email (api/accounts.py) ----
+  static const _base = String.fromEnvironment('API_BASE');
+  static Uri get _accountsUrl => _base.isEmpty ? Uri.base.resolve('/api/accounts') : Uri.parse('$_base/api/accounts');
+
+  static Future<Map<String, dynamic>> _accounts(Map<String, dynamic> body) async {
+    final http.Response res;
+    try {
+      res = await http.post(_accountsUrl, headers: {'Content-Type': 'application/json'}, body: jsonEncode(body)).timeout(const Duration(seconds: 15));
+    } catch (_) {
+      throw BenjAuthError('service');
+    }
+    final data = res.body.isEmpty ? <String, dynamic>{} : jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode == 200) return data;
+    if (res.statusCode == 409) throw BenjAuthError('${data['kind']}-taken');
+    if (res.statusCode == 401) throw BenjAuthError('wrong');
+    if (res.statusCode == 429) throw BenjAuthError('too-many-requests');
+    throw BenjAuthError('service');
+  }
+
+  static bool looksLikeEmail(String s) => RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(s.trim());
+
+  /// Create a benj account. The login is the email if one is given, otherwise the phone.
+  /// Business name (and phone) must not belong to another shop.
+  Future<void> createBenjAccount({required String business, String? phone, String? email, required String password}) async {
+    final free = await _accounts({'action': 'available', 'business': business, 'phone': ?phone});
+    if (free['business'] == false) throw BenjAuthError('business-taken');
+    if (phone != null && free['phone'] == false) throw BenjAuthError('phone-taken');
+    final login = email ?? phoneLogin(phone!);
+    final cred = await _auth.createUserWithEmailAndPassword(email: login, password: password);
+    try {
+      await registerNames(business: business, phone: phone, email: email);
+    } catch (e) {
+      // Someone took the name at the same moment: undo, so nothing is half-made.
+      await cred.user?.delete();
+      rethrow;
+    }
+  }
+
+  /// Records this account's business name / phone / email so it can sign in with any.
+  Future<void> registerNames({String? business, String? phone, String? email}) async {
+    final token = await _auth.currentUser?.getIdToken();
+    if (token == null) throw BenjAuthError('service');
+    await _accounts({'action': 'register', 'idToken': token, 'business': ?business, 'phone': ?phone, 'email': ?email});
+  }
+
+  /// Sign in with a business name, phone number or email, and the password.
+  Future<void> signInAny(String identifier, String password) async {
+    final id = identifier.trim();
+    if (looksLikeEmail(id)) {
+      try {
+        await _auth.signInWithEmailAndPassword(email: id, password: password);
+        return;
+      } on FirebaseAuthException catch (e) {
+        if (e.code != 'invalid-credential' && e.code != 'user-not-found' && e.code != 'wrong-password') rethrow;
+      }
+    }
+    final found = await _accounts({'action': 'resolve', 'identifier': id, 'password': password});
+    await _auth.signInWithEmailAndPassword(email: found['login'] as String, password: password);
+  }
+
+  /// Sends Firebase's reset link to the account's email, if it has one.
+  Future<void> requestReset(String identifier) => _accounts({'action': 'reset', 'identifier': identifier.trim()});
+
+  /// Removes this account from the sign-in index (before deleting the account).
+  Future<void> unregister() async {
+    final token = await _auth.currentUser?.getIdToken();
+    if (token != null) await _accounts({'action': 'unregister', 'idToken': token});
+  }
 
   // ---- Phone ----
   ConfirmationResult? _webConfirmation;
@@ -157,6 +236,16 @@ class AuthService {
 
   /// Plain English for every failure an owner can actually hit.
   static String friendly(Object e) {
+    if (e is BenjAuthError) {
+      return switch (e.code) {
+        'business-taken' => 'That business name is already on benj. Add your area, like "Ama Provisions Berekuso".',
+        'phone-taken' => 'That phone number already has a benj account. Try signing in.',
+        'email-taken' => 'That email already has a benj account. Try signing in.',
+        'wrong' => "That name, number, email or password isn't right.",
+        'too-many-requests' => 'Too many tries. Please wait a little and try again.',
+        _ => "We couldn't reach benj. Check your connection and try again.",
+      };
+    }
     if (e is FirebaseAuthException) {
       switch (e.code) {
         case 'invalid-phone-number':
@@ -185,9 +274,9 @@ class AuthService {
         case 'wrong-password':
         case 'user-not-found':
         case 'invalid-credential':
-          return 'That email or password isn\'t right.';
+          return "That name, number, email or password isn't right.";
         case 'email-already-in-use':
-          return 'That email already has an account. Try signing in.';
+          return 'That email already has a benj account. Try signing in.';
         case 'weak-password':
           return 'Use a password of at least 6 characters.';
         case 'popup-closed-by-user':

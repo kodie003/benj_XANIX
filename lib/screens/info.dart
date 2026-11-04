@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../brand.dart';
-import '../poddy/poddy.dart';
 
 /// About and Privacy. Written as plain lists of sections so the team can update the
 /// wording as benj grows: change the text here and bump [infoUpdated].
@@ -73,7 +72,6 @@ const aboutSections = <(String, String)>[
         'Selikem Avle (team lead), Josephine Yeboah-Kodie, Moyinoluwa Afolabi, Bright Boateng and Emmanuella Afefa Bamezon. '
         'It is an early version that we are testing with shop owners and improving as we go.',
   ),
-  ('Credits', poddyCredit),
   ('Contact', 'Questions, ideas or problems? Email $supportEmail.'),
 ];
 
