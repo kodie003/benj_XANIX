@@ -1,4 +1,4 @@
-package com.benj.seeyou
+package com.benj.app
 
 import io.flutter.embedding.android.FlutterActivity
 
