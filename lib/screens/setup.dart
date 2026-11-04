@@ -34,11 +34,10 @@ class _SetupScreenState extends State<SetupScreen> {
         title: const BenjLogo(height: 26),
         actions: [if (widget.onSignOut != null) TextButton(onPressed: widget.onSignOut, child: const Text('Sign out'))],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const PoddyCard(mood: 'hello', line: "Hi! I'll help you see what your sales are telling you.", height: 190),
-          const SizedBox(height: 16),
+      body: Stack(children: [
+        ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+          children: [
           Text('Your business already tells a story every day.', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
           const Text(
@@ -53,8 +52,10 @@ class _SetupScreenState extends State<SetupScreen> {
           const Text('Next, add the items you sell on the Items tab.'),
           const SizedBox(height: 16),
           FilledButton(onPressed: _start, child: const Padding(padding: EdgeInsets.all(12), child: Text('Start'))),
-        ],
-      ),
+          ],
+        ),
+        PoddyPeek(side: PeekSide.left, mood: 'hello', lines: const ["Hi! I'm Poddy.", "Let's set up your shop."], tips: poddyTips['setup']!, lift: 24),
+      ]),
     );
   }
 }

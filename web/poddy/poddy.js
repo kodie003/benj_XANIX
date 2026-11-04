@@ -36,7 +36,7 @@ export function mount(el, mood = 'idle') {
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.domElement.style.cssText = 'width:100%;height:100%;display:block;touch-action:pan-y';
+  renderer.domElement.style.cssText = 'width:100%;height:100%;display:block;pointer-events:none';
   el.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -105,12 +105,9 @@ export function mount(el, mood = 'idle') {
     state.look.set(((e.clientX - r.left) / r.width) * 2 - 1, ((e.clientY - r.top) / r.height) * 2 - 1);
     state.look.clampScalar(-1.5, 1.5);
   };
-  const onTap = () => {
-    if (state.mood === 'sleep' || state.mood === 'shock') { set('hello', 1600); return; }
-    set('hello', 1600);
-  };
+  // Taps are handled by the app (Flutter), which calls set('hello') and shows help.
+  el.style.pointerEvents = 'none';
   window.addEventListener('pointermove', onMove, { passive: true });
-  el.addEventListener('pointerdown', onTap);
 
   function set(next, ms) {
     if (!MOODS[next]) return;
@@ -178,8 +175,9 @@ export function mount(el, mood = 'idle') {
       cancelAnimationFrame(raf);
       ro.disconnect();
       window.removeEventListener('pointermove', onMove);
-      el.removeEventListener('pointerdown', onTap);
       renderer.dispose();
+      // Free the WebGL context now: browsers only allow a handful at once.
+      renderer.forceContextLoss();
       renderer.domElement.remove();
     },
   };

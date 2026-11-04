@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 
 /// Draws Poddy (web/poddy/poddy.js) inside a platform view.
 class PoddyView extends StatefulWidget {
-  const PoddyView({super.key, required this.mood, this.flash, this.flashTick = 0});
+  const PoddyView({super.key, required this.mood, this.flash, this.flashTick = 0, this.onTap});
 
   /// Resting mood: idle, hello, present, shock, sad, sleep.
   final String mood;
@@ -13,6 +13,9 @@ class PoddyView extends StatefulWidget {
   /// A short reaction played once each time [flashTick] changes, e.g. "welcome".
   final String? flash;
   final int flashTick;
+
+  /// Called when Poddy is tapped (he also waves).
+  final VoidCallback? onTap;
 
   @override
   State<PoddyView> createState() => _PoddyViewState();
@@ -62,12 +65,21 @@ class _PoddyViewState extends State<PoddyView> {
     if (!_supported) return const SizedBox.shrink();
     return Semantics(
       label: 'Poddy, the benj helper',
-      child: HtmlElementView.fromTagName(
-        tagName: 'div',
-        onElementCreated: (Object el) {
-          _el = el as JSObject;
-          _mountWhenReady();
+      button: widget.onTap != null,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          final el = _el, api = _api;
+          if (el != null && api != null) api.callMethod('set'.toJS, el, 'hello'.toJS, 1600.toJS);
+          widget.onTap?.call();
         },
+        child: HtmlElementView.fromTagName(
+          tagName: 'div',
+          onElementCreated: (Object el) {
+            _el = el as JSObject;
+            _mountWhenReady();
+          },
+        ),
       ),
     );
   }

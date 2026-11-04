@@ -1,8 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-0.0 -928.5 1194.5 1194.5">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-0.0 -998.0 1264.0 1264.0">
   <title>benj</title>
-  <rect x="0" y="-928.5" width="1194.5" height="1194.5" rx="286.7" fill="#1B7A3D"/>
-  <circle cx="592.6" cy="-279.0" r="224.0" fill="none" stroke="#FFFFFF" stroke-width="126"/>
-  <path d="M368.6 -279.0 V-677.0" stroke="#FFFFFF" stroke-width="126" stroke-linecap="round"/>
-  <path d="M751.0 -120.6 L885.6 14.0" stroke="#FFFFFF" stroke-width="126" stroke-linecap="round"/>
-  <path d="M506.2 -328.9 A99.8 99.8 0 0 1 566.8 -375.4" fill="none" stroke="#8FD3A1" stroke-width="48.3" stroke-linecap="round"/>
+  <rect x="0" y="-998.0" width="1264.0" height="1264.0" rx="303.4" fill="#1B7A3D"/>
+  <circle cx="647.2" cy="-279.0" r="224.0" fill="none" stroke="#FFFFFF" stroke-width="126"/>
+  <path d="M423.2 -279.0 V-677.0" stroke="#FFFFFF" stroke-width="126" stroke-linecap="round"/>
+  <path d="M560.7 -328.9 A99.8 99.8 0 0 1 621.3 -375.4" fill="none" stroke="#8FD3A1" stroke-width="48.3" stroke-linecap="round"/>
 </svg>

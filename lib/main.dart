@@ -97,6 +97,33 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   int _tab = 0;
+  bool _welcomed = false;
+
+  /// Poddy peeks from a different side on each tab and says only a few words.
+  Widget _peek(AppState state) {
+    final mood = poddyMood(state);
+    final owner = (state.business?['owner'] as String? ?? '').trim();
+    final noItems = state.items.isEmpty;
+    final (side, lines, tips) = switch (_tab) {
+      0 => (
+          PeekSide.right,
+          [if (!_welcomed) owner.isEmpty ? 'Welcome back!' : 'Welcome back, $owner!', mood.line],
+          poddyTips['home']!,
+        ),
+      1 => (PeekSide.left, [noItems ? 'Add your items first.' : "Type today's numbers."], poddyTips['record']!),
+      _ => (PeekSide.bottom, [noItems ? 'Add your first item.' : 'Keep your prices fresh.'], poddyTips['items']!),
+    };
+    return PoddyPeek(
+      key: ValueKey('peek$_tab'),
+      side: side,
+      mood: _tab == 0 ? mood.mood : (noItems ? 'hello' : 'present'),
+      lines: lines,
+      tips: tips,
+      flashTick: state.savedTick,
+      flashLine: 'Saved. Nice work!',
+      lift: 24,
+    );
+  }
 
   void _menu(String v) {
     final state = widget.state;
@@ -139,10 +166,14 @@ class _ShellState extends State<Shell> {
           ),
         ],
       ),
-      body: pages[_tab],
+      body: Stack(children: [pages[_tab], _peek(state)]),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
+        // The welcome is said once; after leaving Home he only gives the news.
+        onDestinationSelected: (i) => setState(() {
+          if (_tab == 0) _welcomed = true;
+          _tab = i;
+        }),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.lightbulb_outline), label: 'This week'),
           NavigationDestination(icon: Icon(Icons.edit_note), label: 'Record'),
