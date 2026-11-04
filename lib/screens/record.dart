@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models.dart';
+import '../poddy/poddy.dart';
 
 /// FR-B2: end-of-day bulk entry. One screen, one number per item - like the paper tally.
 class RecordScreen extends StatefulWidget {
@@ -48,6 +49,13 @@ class _RecordScreenState extends State<RecordScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        PoddyCard(
+          mood: state.items.isEmpty ? 'hello' : 'present',
+          line: state.items.isEmpty ? 'Add your items on the Items tab first.' : "Type today's numbers, like your tally book.",
+          flashTick: state.savedTick,
+          height: 130,
+        ),
+        const SizedBox(height: 12),
         SegmentedButton<String>(
           segments: [for (final e in _modes.entries) ButtonSegment(value: e.key, label: Text(e.value.$1))],
           selected: {_mode},

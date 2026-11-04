@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models.dart';
+import '../poddy/poddy.dart';
 
 String cedis(num v) => 'GHS ${v.round()}';
 
@@ -14,11 +15,14 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final data = state.insights;
+    final poddy = poddyMood(state);
     return RefreshIndicator(
       onRefresh: state.refresh,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          PoddyCard(mood: poddy.mood, line: poddy.line, flashTick: state.savedTick),
+          const SizedBox(height: 12),
           if (state.loading) const LinearProgressIndicator(),
           if (state.error != null) Text(state.error!, style: const TextStyle(color: Colors.red)),
           if (data != null) ..._content(context, data),

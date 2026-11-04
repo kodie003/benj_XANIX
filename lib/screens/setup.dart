@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models.dart';
+import '../poddy/poddy.dart';
 
 /// Onboarding: just name the business. Items are added by the owner on the Items tab.
 class SetupScreen extends StatefulWidget {
@@ -31,6 +32,8 @@ class _SetupScreenState extends State<SetupScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const PoddyCard(mood: 'hello', line: "Hi! I'll help you see what your sales are telling you.", height: 190),
+          const SizedBox(height: 16),
           Text('Your business already tells a story every day.', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
           const Text(

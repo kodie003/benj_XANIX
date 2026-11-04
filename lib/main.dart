@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
 import 'models.dart';
+import 'poddy/poddy.dart';
 import 'screens/home.dart';
 import 'screens/items.dart';
 import 'screens/record.dart';
@@ -56,8 +57,20 @@ class _ShellState extends State<Shell> {
         actions: [
           IconButton(icon: const Icon(Icons.refresh), tooltip: 'Update my actions', onPressed: state.refresh),
           PopupMenuButton<String>(
-            onSelected: (_) => state.reset(),
-            itemBuilder: (_) => [const PopupMenuItem(value: 'reset', child: Text('Start over (deletes records)'))],
+            onSelected: (v) => v == 'credits'
+                ? showDialog<void>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text('Credits'),
+                      content: const Text(poddyCredit),
+                      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+                    ),
+                  )
+                : state.reset(),
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'credits', child: Text('Credits')),
+              const PopupMenuItem(value: 'reset', child: Text('Start over (deletes records)')),
+            ],
           ),
         ],
       ),
