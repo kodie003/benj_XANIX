@@ -1,0 +1,101 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model (benj PRD section 9)
+// ===============================================================
+//
+// shops/{uid}                 one shop per signed-in owner; the document ID is the owner's uid
+//   name: string (required, 1-120)     location, ownerPhone, ownerName: string (optional)
+//   restockDay: int 1-7 or null        consentAt: timestamp (required)
+//
+// shops/{uid}/products/{id}
+//   name: string (required, 1-120)     unit: string (required)     size: string (optional)
+//   costPrice, sellPrice, warningLevel: number >= 0 or null
+//
+// shops/{uid}/stockLogs/{id}
+//   product: string (required)         at: timestamp (required)
+//   type: 'count' | 'sale' | 'restock' quantity: number >= 0 (required)
+//   method: 'tap' | 'voice' | 'photo' | 'type' | 'setup'
+//   unitPrice: number (optional)       secondsTaken: int >= 0 (optional)
+//
+// shops/{uid}/events/{id}
+//   name: string (required)            start, end: timestamp (required)
+//   factor: number 0-5 (required)      demand multiplier
+//
+// Nothing is public. An owner reads and writes only their own shop.
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    function isStr(v, max) {
+      return v is string && v.size() <= max;
+    }
+    function optStr(d, k, max) {
+      return !(k in d) || isStr(d[k], max);
+    }
+    function optNum(d, k) {
+      return !(k in d) || d[k] == null || (d[k] is number && d[k] >= 0);
+    }
+
+    function isValidShop(d) {
+      return d.keys().hasOnly(['name', 'location', 'ownerPhone', 'ownerName', 'restockDay', 'consentAt'])
+        && d.keys().hasAll(['name', 'consentAt'])
+        && isStr(d.name, 120) && d.name.size() > 0
+        && optStr(d, 'location', 200) && optStr(d, 'ownerPhone', 40) && optStr(d, 'ownerName', 120)
+        && (!('restockDay' in d) || d.restockDay == null || (d.restockDay is int && d.restockDay >= 1 && d.restockDay <= 7))
+        && d.consentAt is timestamp;
+    }
+    function isValidProduct(d) {
+      return d.keys().hasOnly(['name', 'unit', 'size', 'costPrice', 'sellPrice', 'warningLevel'])
+        && d.keys().hasAll(['name', 'unit'])
+        && isStr(d.name, 120) && d.name.size() > 0
+        && isStr(d.unit, 30)
+        && optStr(d, 'size', 30)
+        && optNum(d, 'costPrice') && optNum(d, 'sellPrice') && optNum(d, 'warningLevel');
+    }
+    function isValidLog(d) {
+      return d.keys().hasOnly(['product', 'at', 'type', 'quantity', 'unitPrice', 'method', 'secondsTaken'])
+        && d.keys().hasAll(['product', 'at', 'type', 'quantity'])
+        && isStr(d.product, 128)
+        && d.at is timestamp
+        && d.type in ['count', 'sale', 'restock']
+        && d.quantity is number && d.quantity >= 0
+        && optNum(d, 'unitPrice')
+        && (!('method' in d) || d.method in ['tap', 'voice', 'photo', 'type', 'setup'])
+        && (!('secondsTaken' in d) || (d.secondsTaken is int && d.secondsTaken >= 0));
+    }
+    function isValidEvent(d) {
+      return d.keys().hasOnly(['name', 'start', 'end', 'factor'])
+        && d.keys().hasAll(['name', 'start', 'end', 'factor'])
+        && isStr(d.name, 120) && d.name.size() > 0
+        && d.start is timestamp && d.end is timestamp && d.end >= d.start
+        && d.factor is number && d.factor >= 0 && d.factor <= 5;
+    }
+
+    match /shops/{uid} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && isValidShop(request.resource.data);
+
+      match /products/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && isValidProduct(request.resource.data);
+      }
+      match /stockLogs/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && isValidLog(request.resource.data);
+      }
+      match /events/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && isValidEvent(request.resource.data);
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

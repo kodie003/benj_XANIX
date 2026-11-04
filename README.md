@@ -1,85 +1,98 @@
-# SeeYou — v1 concept MVP
+# benj
 
-**Team Benj · XANIX Challenge 2026 · Opportunity: "The Business That Can't See Itself"**
+**Team benj · XANIX Challenge 2026 · The Business That Can't See Itself**
 
-> Your business already tells a story every day. We help you read it — and tell you what to do next.
+> Small shops are not short of records; they are short of foresight. benj turns records into foresight.
 
-## Who it's for
+benj tells a small shop owner what to restock, how much, and when, before they run out.
+It's for single-outlet shops selling countable goods (bags, packs, cartons, crates). Live at https://benj-xanix.vercel.app.
 
-Owner-run food and provisions businesses near Ashesi (Berekuso) that **tally sales and stock by hand**: the rice seller, the waakye stand, the campus snack shop. Bigger operators with a POS are explicitly out of scope, because they can already see themselves.
+## What's built (PRD section 7)
 
-## What makes it different
-
-Ghana already has record-keeping tools (SikaBooks, Chopmoney, OZÉ, Bumpa, Kippa). They all give the owner **dashboards**. SeeYou gives **decisions**:
-
-| Typical bookkeeping app | SeeYou |
-|---|---|
-| Charts the owner never opens | **3 plain actions a week**, each with the reason and the cedis at stake |
-| One low-stock alert per item | **One market list** for the next trip: "buy 14 bags rice; 13 bottles oil…" |
-| Doesn't know the calendar | **Knows the owner's rhythm**: the owner adds busy or quiet days (school break, exams), and advice adjusts the week before |
-| Records sales | Spots **waste** (how much was thrown away, in cedis) and **weekday patterns** (which days sell less) |
-| Keeps the owner inside the app | Sends the week as a **WhatsApp message**, ready to share |
-| Assumes the advice works | **"I did this"** on each action measures whether advice changes behaviour (our north-star metric) |
-
-## Try it
-
-The app starts empty. There is no demo or sample data; everything you see comes from what the owner enters.
-
-1. Name the business.
-2. **Items** tab: add each item with what you pay, what you charge, your reorder level, and how many you have now. Optionally add upcoming busy or quiet days.
-3. **Record** tab: at the end of each day, enter how many were sold, bought/made, or thrown away.
-4. **This week** tab: see the 3 actions, then send them to WhatsApp. Weekday patterns appear after 3 weeks of records.
-
-## How it works
-
-```
- Flutter app (on the phone)                     Python insight engine (Vercel function)
- ─────────────────────────                      ──────────────────────────────────────
- Record tab: end-of-day tally   ── records ──▶  api/insights.py
- (sold / bought / thrown away)                   stock on hand, weekly sales & profit
- Items tab: stock + margin                        rules R1–R8 → ranked actions
- This week tab: 3 actions  ◀── 3 actions ───    WhatsApp weekly message
- + WhatsApp share + "I did this"
-```
-
-- **No logins, no database (yet).** Records live on the phone (`shared_preferences`). The engine is stateless: the app sends its records and gets advice back. The owner's data stays the owner's (PRD principle).
-- **Every insight is a one-sentence rule** (PRD §13). No ML until we have weeks of real data.
-
-| Rule | What it looks at | Where |
+| ID | Feature | Where |
 |---|---|---|
-| R1/R2 Low stock + run-out forecast | One combined market list, sized to cover a week | `rule_restock` |
-| R3 Top/bottom earners | Which item makes most of the profit, and which loses money | `rule_profit_mix` |
-| R4 Weekday pattern (3+ weeks of data) | Days that sell ≥25% less/more of a fresh item | `rule_weekday` |
-| R5 Margin squeeze | Supplier price rose (from "Bought" entries) → suggested new price | `rule_margin` |
-| R7 Calendar shift | Busy or quiet days the owner entered | `rule_calendar` |
-| R8 Data gap | No tally for 2+ days | `rule_data_gap` |
-| Waste | More than 10% of a fresh item thrown away | `rule_waste` |
+| F1 | Shop setup | `lib/screens/setup_screen.dart`, `product_form.dart` |
+| F2 | Quick stock log, offline | `lib/screens/log_screen.dart` |
+| F3 | Restock entry | Log > Bought, or tick items on the buying list |
+| F4 | Low-stock warning | Home; owner's level or benj's suggestion (`product_screen.dart`) |
+| F5 | Weekly buying list | `lib/screens/buying_screen.dart` |
+| F6 | Calendar | `settings_screen.dart`; official dates go in `assets/ashesi_calendar.json` |
+| F7 | Forecast vs actual | Product screen, replays the log as of each past Monday |
+| F8 | Stock dashboard | `lib/screens/stock_screen.dart` |
+| F9 | Voice input | `capture_sheets.dart`, `lib/core/voice_parser.dart` |
+| F10 | Photo input (owner confirms) | `capture_sheets.dart`, Gemini through Firebase AI Logic |
+| F12 | Budget-aware list | Cash field on the buying list |
 
-Actions are ranked by urgency, then by **cedis at stake**, with at most one per rule. The owner only ever sees 3.
+Every log stores its input method and seconds taken, so the riskiest assumption (will a busy owner log?) is measured. See Settings > My numbers.
 
-## Run locally
+## How it fits together
+
+```
+Flutter web app (installable PWA)
+  ├─ Firebase Auth: phone (SMS), Google, email
+  ├─ Firestore: shops/{uid}/... with an offline cache; private to each owner
+  ├─ lib/core/forecast.dart: warnings and lists, works with no network
+  └─ web/fx/: mascot and effects (three.js and shaders), loaded only when needed
+Python service: api/forecast.py on Vercel
+  the same formulas; tests/forecast_vectors.json keeps Python and Dart identical
+```
+
+### The forecast, in full (PRD section 9)
+
+```
+daily demand d   = mean units sold per day, last 14 days (sold-out days skipped)
+calendar factor f = average of the owner's event factors over the period
+warning level    = d * f * L + 1.65 * sd * sqrt(L)     L = days to next restock
+buy Q            = d * f * 7 + 1.65 * sd * sqrt(7) - stock on hand, rounded up
+```
+
+Below 3 days of logs benj says "still learning" rather than suggest amounts.
+
+### Effects
+
+| Moment | File | Notes |
+|---|---|---|
+| Boot logo, liquid metal | `web/fx/glyph.js` (metal) | No three.js, so it loads first |
+| "benj" name, liquid glass | `web/fx/glyph.js` (glass) | |
+| Mascot | `web/fx/mascot.js` | Modelled in code; also exported as `web/fx/benj.glb` |
+| Loading | `web/fx/quantum.js` | Particles settle into the logo |
+| Voice orb | `web/fx/orb.js` | Reacts to the real mic level |
+| Saving a log | `web/fx/glow.js` | Morphs, then resolves into a tick |
+| Stock Constellation | `web/fx/nodes.js` | Height = days left; drag the timeline to see the future |
+| Team portraits | `web/fx/team.js` | Add headshots at `web/team/{id}.jpg` |
+| Globe | `web/fx/globe.js` | Beacon on Berekuso |
+| Floating sparkle | `lib/widgets/sparkle.dart` | Drawn by Flutter, answers from real records |
+
+All are written for benj, inspired by the references rather than copied. three.js is MIT licensed.
+
+### Team headshots
+
+Add a clear, well-lit square photo for each person, then redeploy: `web/team/selikem.jpg`, `josephine.jpg`, `moyinoluwa.jpg`, `bright.jpg`, `emmanuella.jpg`. Until a photo exists, an anonymous dotted bust holds the place.
+
+## Run it
 
 ```bash
-python -m unittest discover tests        # engine tests
-flutter build web                         # (C:\src\flutter\bin\flutter.bat on Joseph's machine)
-python scripts/dev_server.py              # http://localhost:8000  — same routes as Vercel
+python -m unittest discover tests      # forecast, Python
+flutter test                           # forecast, voice, budget, phone numbers
+
+# Whole app, no Firebase account needed
+firebase emulators:start --project demo-benj --only auth,firestore
+flutter build web --no-web-resources-cdn --pwa-strategy=none --dart-define=USE_EMULATOR=true
+python scripts/serve.py 8766           # http://localhost:8766
+
+python scripts/e2e.py OUT_DIR          # full owner journey in a real browser
+python scripts/e2e_security.py OUT_DIR # security rules and SMS sign-in
 ```
 
-## Deploy (Vercel)
+`pip install playwright` first; the scripts drive Microsoft Edge.
 
-Import the GitHub repo into Vercel. `vercel.json` already configures everything: `scripts/vercel_build.sh` installs Flutter and builds `build/web`, and `api/insights.py` deploys as a Python function. No environment variables are needed.
+## Deploy
 
-For an Android build later: `flutter build apk --dart-define=API_BASE=https://<your-app>.vercel.app`
+- App and Python service: push to `main`; Vercel runs `scripts/vercel_build.sh`.
+- Rules: `firebase deploy --only firestore:rules`.
 
-## Tunable thresholds
+## Not done yet
 
-The only built-in numbers are the rule thresholds at the top of `api/insights.py` (`RUNOUT_DAYS`, `WASTE_SHARE`, `THIN_MARGIN`…). These are the PRD's `[X]` placeholders: tune them from interview evidence.
-
-## Next steps (deliberately not built yet)
-
-1. Phone-OTP login + cloud database (Firebase/Supabase) so the team can see usage (FR-A1, FR-E1).
-2. Automated weekly WhatsApp send via the Business Cloud API (FR-D2). Today the owner taps "Send to WhatsApp".
-3. Average sales only over days the item was **in stock**. Today a stock-out makes demand look lower than it is.
-4. Physical count vs expected (R6), expenses, payment type (cash / MoMo / credit), credit "who owes me".
-5. Business-type starter item lists (once interviews give us real prices), photo-of-tally-sheet and voice-note entry; Twi labels.
-6. A real offline queue (records already save offline; only the advice needs a network).
+- WhatsApp or SMS reminders (F11). Today the list shares through a WhatsApp link.
+- Multiple users per shop; perishables; Twi voice input (PRD P2).
+- Native Android 3D. The Android build shows still images of the mascot for now.
