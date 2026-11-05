@@ -15,6 +15,12 @@ POST /api/accounts with JSON {"action": ...}:
   resolve    {identifier, password}        -> {login} when the password is right
   reset      {identifier}                  -> sends Firebase's reset email if the account has one
   unregister {idToken}                     (removes this account from the index)
+  delete_ready {}                          -> {ready: can delete_login run?}
+  delete_login {idToken}                   (deletes the caller's own Firebase login)
+
+From the app alone, Firebase only deletes a login soon after signing in. delete_login has
+no such limit because it uses a Google service key (Vercel env BENJ_ADMIN_KEY, set up with
+scripts/setup_delete_access.py). The account deleted is always the one the idToken proves.
 """
 
 import hashlib
@@ -25,6 +31,7 @@ import time
 import traceback
 import unicodedata
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler
 
@@ -32,6 +39,7 @@ PROJECT = os.environ.get("BENJ_PROJECT", "benj-27c66")
 API_KEY = os.environ.get("BENJ_API_KEY", "AIzaSyB-JRfxfNRUWOiDPx6iiDcBv9xpy-h6He8")  # public web key
 SVC_EMAIL = os.environ.get("BENJ_SVC_EMAIL", "svc-logins@benj.invalid")
 SVC_PASSWORD = os.environ.get("BENJ_SVC_PASSWORD", "")
+ADMIN_KEY = os.environ.get("BENJ_ADMIN_KEY", "")
 AUTH_EMU = os.environ.get("FIREBASE_AUTH_EMULATOR_HOST")
 FS_EMU = os.environ.get("FIRESTORE_EMULATOR_HOST")
 IDT = (f"http://{AUTH_EMU}/" if AUTH_EMU else "https://") + "identitytoolkit.googleapis.com/v1"
@@ -184,6 +192,34 @@ def fs_delete(k):
     call(f"{FS}/logins/{k}", token=svc_token(), method="DELETE")
 
 
+# The Google token for deleting logins, reused while it is fresh.
+_admin = {"token": None, "until": 0}
+
+
+def admin_token():
+    if not ADMIN_KEY:
+        raise ApiError(503, {"error": "delete-not-configured"})
+    if AUTH_EMU:  # The local emulator accepts this fixed admin token.
+        return "owner"
+    if _admin["token"] and time.time() < _admin["until"]:
+        return _admin["token"]
+    import jwt  # Only this path needs it, so a problem here can't break sign-in.
+    sa = json.loads(ADMIN_KEY)
+    now = int(time.time())
+    # This token can only manage logins, whatever else the key itself could do.
+    assertion = jwt.encode(
+        {"iss": sa["client_email"], "scope": "https://www.googleapis.com/auth/identitytoolkit", "aud": "https://oauth2.googleapis.com/token", "iat": now, "exp": now + 3600},
+        sa["private_key"],
+        algorithm="RS256",
+    )
+    form = urllib.parse.urlencode({"grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer", "assertion": assertion}).encode()
+    req = urllib.request.Request("https://oauth2.googleapis.com/token", form, {"Content-Type": "application/x-www-form-urlencoded"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        res = json.loads(r.read())
+    _admin.update(token=res["access_token"], until=now + int(res.get("expires_in", 3600)) - 300)
+    return _admin["token"]
+
+
 # ---------------------------------------------------------------- actions
 
 def act_available(body):
@@ -257,7 +293,27 @@ def act_unregister(body):
     return {"ok": True}
 
 
-ACTIONS = {"available": act_available, "register": act_register, "resolve": act_resolve, "reset": act_reset, "unregister": act_unregister}
+def act_delete_ready(body):
+    try:
+        admin_token()
+        return {"ready": True}
+    except Exception:  # Not set up or the key is bad: the app asks for a password instead.
+        traceback.print_exc()
+        return {"ready": False}
+
+
+def act_delete_login(body):
+    uid, _ = user_of(body.get("idToken", ""))
+    token = admin_token()  # Before anything changes, so a bad key leaves the account whole.
+    for doc_id, _ in fs_docs_of(uid):
+        fs_delete(doc_id)
+    status, _ = call(f"{IDT}/projects/{PROJECT}/accounts:delete", {"localId": uid}, token=token)
+    if status != 200:
+        raise ApiError(502, {"error": "delete-failed"})
+    return {"ok": True}
+
+
+ACTIONS = {"available": act_available, "register": act_register, "resolve": act_resolve, "reset": act_reset, "unregister": act_unregister, "delete_ready": act_delete_ready, "delete_login": act_delete_login}
 
 
 class handler(BaseHTTPRequestHandler):

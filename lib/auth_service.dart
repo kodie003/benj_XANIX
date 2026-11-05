@@ -218,15 +218,60 @@ class AuthService {
     return friendly(e);
   }
 
-  /// Firebase only lets an account be deleted soon after signing in.
+  /// From the app alone, Firebase only lets an account be deleted soon after signing in.
   bool get signedInRecently {
     final at = _auth.currentUser?.metadata.lastSignInTime;
     return at != null && DateTime.now().difference(at) < const Duration(minutes: 4);
   }
 
-  Future<void> deleteAccount() async {
-    if (!kIsWeb && _googleReady) await GoogleSignIn.instance.signOut();
-    await _auth.currentUser?.delete();
+  /// True when benj's service can delete this login with no extra step (api/accounts.py).
+  /// Asked before any data is touched, so nothing is half-deleted.
+  Future<bool> canDeleteInstantly() async {
+    try {
+      return (await _accounts({'action': 'delete_ready'}))['ready'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// How this account proves it's the owner: 'password', 'google' or null if neither.
+  String? get confirmMethod {
+    final ids = _auth.currentUser?.providerData.map((p) => p.providerId) ?? const <String>[];
+    if (ids.contains('password')) return 'password';
+    if (ids.contains('google.com')) return 'google';
+    return null;
+  }
+
+  /// Proves it's the owner without signing out, for when [canDeleteInstantly] is false.
+  Future<void> confirmIdentity({String? password}) async {
+    final u = _auth.currentUser!;
+    if (password != null) {
+      await u.reauthenticateWithCredential(EmailAuthProvider.credential(email: u.email!, password: password));
+    } else if (kIsWeb) {
+      await u.reauthenticateWithPopup(GoogleAuthProvider());
+    } else {
+      if (!_googleReady) {
+        await GoogleSignIn.instance.initialize();
+        _googleReady = true;
+      }
+      final account = await GoogleSignIn.instance.authenticate();
+      await u.reauthenticateWithCredential(GoogleAuthProvider.credential(idToken: account.authentication.idToken));
+    }
+  }
+
+  /// Deletes the login. [instantly] uses benj's service, otherwise the app asks Firebase.
+  Future<void> deleteAccount({bool instantly = false}) async {
+    if (instantly) {
+      final token = await _auth.currentUser?.getIdToken();
+      if (token == null) throw BenjAuthError('service');
+      await _accounts({'action': 'delete_login', 'idToken': token}); // Also frees the names.
+      if (!kIsWeb && _googleReady) await GoogleSignIn.instance.signOut();
+      await _auth.signOut(); // The login is gone: drop this device's session too.
+    } else {
+      await unregister();
+      if (!kIsWeb && _googleReady) await GoogleSignIn.instance.signOut();
+      await _auth.currentUser?.delete();
+    }
   }
 
   Future<void> signOut() async {

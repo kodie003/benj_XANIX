@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuthException;
 
 import '../auth_service.dart';
 import '../brand.dart';
@@ -173,30 +174,46 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
     if (ok != true || !context.mounted) return;
-    // Firebase only allows deleting an account soon after signing in. Check before
-    // touching any data, so nothing is half-deleted.
-    if (!auth.signedInRecently) {
-      await showDialog<void>(
-        context: context,
-        builder: (c) => AlertDialog(
-          title: const Text('Please sign in again first'),
-          content: const Text('For your safety, sign out, sign back in, and then delete your account straight away.'),
-          actions: [FilledButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
-        ),
-      );
-      return;
-    }
     showDialog<void>(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    // Settled before touching any data, so nothing is half-deleted.
+    final instantly = await auth.canDeleteInstantly();
+    if (!context.mounted) return;
+    if (!instantly && !auth.signedInRecently) {
+      Navigator.of(context).pop();
+      if (!await _confirmIdentity(context) || !context.mounted) return;
+      showDialog<void>(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    }
     try {
-      await auth.unregister();
+      // Records first, login last: if anything fails the owner can still sign in and retry.
       await repo.deleteEverything();
-      await auth.deleteAccount();
+      await auth.deleteAccount(instantly: instantly);
       if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
     } catch (e) {
       if (!context.mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't delete everything: ${AuthService.friendly(e)} Check your connection and try again.")));
     }
+  }
+
+  /// Firebase needs fresh proof of who's deleting when benj's service can't do it.
+  /// The owner stays signed in throughout. Returns false if they back out.
+  Future<bool> _confirmIdentity(BuildContext context) async {
+    final method = auth.confirmMethod;
+    if (method == 'google') {
+      try {
+        await auth.confirmIdentity();
+        return true;
+      } catch (e) {
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AuthService.friendly(e))));
+        return false;
+      }
+    }
+    if (method == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Couldn't confirm it's you. Please try again in a moment.")));
+      return false;
+    }
+    final confirmed = await showDialog<bool>(context: context, builder: (_) => _PasswordConfirm(auth: auth));
+    return confirmed == true;
   }
 
   Future<void> _removeDuplicates(BuildContext context) async {
@@ -348,4 +365,62 @@ class _LoggingNumbers extends StatelessWidget {
 
 extension on String {
   String ifEmpty(String other) => isEmpty ? other : this;
+}
+
+class _PasswordConfirm extends StatefulWidget {
+  const _PasswordConfirm({required this.auth});
+  final AuthService auth;
+
+  @override
+  State<_PasswordConfirm> createState() => _PasswordConfirmState();
+}
+
+class _PasswordConfirmState extends State<_PasswordConfirm> {
+  final _password = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _confirm() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.auth.confirmIdentity(password: _password.text);
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = e is FirebaseAuthException && (e.code == 'wrong-password' || e.code == 'invalid-credential') ? "That password isn't right." : AuthService.friendly(e);
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Type your password'),
+        content: TextField(
+          controller: _password,
+          obscureText: true,
+          autofocus: true,
+          onSubmitted: (_) => _busy ? null : _confirm(),
+          decoration: InputDecoration(labelText: 'Your password', border: const OutlineInputBorder(), errorText: _error),
+        ),
+        actions: [
+          TextButton(onPressed: _busy ? null : () => Navigator.pop(context, false), child: const Text('Keep my account')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            onPressed: _busy ? null : _confirm,
+            child: const Text('Delete everything'),
+          ),
+        ],
+      );
 }
