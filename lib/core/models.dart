@@ -28,7 +28,9 @@ class Shop {
       };
 }
 
-const kUnits = ['bag', 'pack', 'carton', 'crate', 'bottle', 'tin', 'piece'];
+/// How products are counted. "olonka" is the Ghanaian tin measure for grains (rice, gari,
+/// beans); it has no standard size, so benj counts olonkas and never converts to kilos.
+const kUnits = ['bag', 'pack', 'carton', 'crate', 'bottle', 'tin', 'piece', 'olonka'];
 
 class Product {
   Product({
@@ -48,6 +50,16 @@ class Product {
   final double? warningLevel;
 
   String get label => size.isEmpty ? name : '$name $size';
+
+  /// What counts as "the same product": name and size, ignoring capitals and spaces,
+  /// so "Rice 1 kg" and "rice 1kg" match.
+  static String keyOf(String name, String size) => '$name $size'
+      .toLowerCase()
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceAllMapped(RegExp(r'(\d) (kg|g|ml|l)\b'), (m) => '${m[1]}${m[2]}')
+      .trim();
+
+  String get key => keyOf(name, size);
 
   /// Variants of a product (rice 1 kg, rice 4.5 kg) share a group.
   String get group => name.trim().toLowerCase();
@@ -76,7 +88,7 @@ class Product {
 
   String plural(num n) {
     if (n == 1) return unit;
-    return unit == 'piece' || unit == 'crate' || unit == 'pack' || unit == 'bag' || unit == 'carton' || unit == 'bottle' || unit == 'tin' ? '${unit}s' : unit;
+    return kUnits.contains(unit) ? '${unit}s' : unit;
   }
 }
 

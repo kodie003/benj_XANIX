@@ -5,6 +5,7 @@ import 'package:benj/core/forecast.dart';
 import 'package:benj/core/models.dart';
 import 'package:benj/auth_service.dart';
 import 'package:benj/core/countries.dart';
+import 'package:benj/core/reader.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Product p(String id, String name, {String size = '', String unit = 'bag', double? warn}) => Product(id: id, name: name, unit: unit, size: size, warningLevel: warn);
@@ -53,6 +54,29 @@ void main() {
       expect(plan[0].product.id, 'urgent');
       expect(plan[0].buy, 5);
       expect(plan[1].buy, 2);
+    });
+  });
+
+  group('photo reading', () {
+    test('the same product written twice becomes one, with counts added', () {
+      final merged = ProductReader.mergeSame([
+        ProductDraft(name: 'Rice', size: '1 kg', unit: 'bag', onHand: 20, costPrice: 18),
+        ProductDraft(name: 'Milo', unit: 'tin', onHand: 12),
+        ProductDraft(name: 'rice', size: '1kg', unit: 'bag', onHand: 10),
+      ]);
+      expect(merged.length, 2);
+      final rice = merged.firstWhere((d) => d.name == 'Rice');
+      expect(rice.onHand, 30);
+      expect(rice.seen, 2);
+      expect(rice.costPrice, 18);
+    });
+    test('"Rice 1 kg" and "rice 1kg" count as the same product', () {
+      expect(Product.keyOf('Rice', '1 kg'), Product.keyOf('rice', '1kg'));
+      expect(Product.keyOf('Rice', '1 kg'), isNot(Product.keyOf('Rice', '4.5 kg')));
+    });
+    test('olonka is a unit', () {
+      expect(kUnits, contains('olonka'));
+      expect(Product(id: 'g', name: 'Gari', unit: 'olonka').plural(3), 'olonkas');
     });
   });
 

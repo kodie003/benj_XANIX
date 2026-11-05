@@ -71,6 +71,15 @@ class SettingsScreen extends StatelessWidget {
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () => openProduct(context, repo, p),
                           ),
+                        // Same product added twice? One tap merges the copies, keeping their logs.
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+                          child: OutlinedButton.icon(
+                            onPressed: () => _removeDuplicates(context),
+                            icon: const Icon(Icons.layers_clear_outlined),
+                            label: Text(repo.duplicateGroups.isEmpty ? 'Remove duplicates' : 'Remove duplicates (${repo.duplicateGroups.fold<int>(0, (s, g) => s + g.length - 1)})'),
+                          ),
+                        ),
                       ]),
                     ),
             ),
@@ -188,6 +197,32 @@ class SettingsScreen extends StatelessWidget {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't delete everything: ${AuthService.friendly(e)} Check your connection and try again.")));
     }
+  }
+
+  Future<void> _removeDuplicates(BuildContext context) async {
+    final groups = repo.duplicateGroups;
+    if (groups.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No duplicate products. Each one is listed once.')));
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Remove duplicates?'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          for (final g in groups) Text('• ${g.first.label}: listed ${g.length} times'),
+          const SizedBox(height: 10),
+          const Text("benj keeps one of each and moves the others' logs onto it, so no sales are lost."),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Remove duplicates')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final n = await repo.removeDuplicates();
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Removed $n duplicate ${n == 1 ? 'product' : 'products'}.')));
   }
 
   static String _date(DateTime d) => '${d.day}/${d.month}/${d.year}';

@@ -131,6 +131,41 @@ class ShopRepo extends ChangeNotifier {
     await _settle(batch.commit());
   }
 
+  /// Products with the same name and size (e.g. "Rice 1 kg" added twice), in groups.
+  List<List<Product>> get duplicateGroups {
+    final groups = <String, List<Product>>{};
+    for (final p in products) {
+      (groups[p.key] ??= []).add(p);
+    }
+    return groups.values.where((g) => g.length > 1).toList();
+  }
+
+  /// Keeps one product per group (the one with the most history), moves the other
+  /// copies' logs onto it so no sales are lost, then deletes the copies.
+  Future<int> removeDuplicates() async {
+    var removed = 0;
+    for (final group in duplicateGroups) {
+      group.sort((a, b) => logsFor(b.id).length.compareTo(logsFor(a.id).length));
+      final keep = group.first;
+      final batch = _db.batch();
+      for (final copy in group.skip(1)) {
+        for (final l in logsFor(copy.id)) {
+          batch.update(_logs.doc(l.id), {'product': keep.id});
+        }
+        batch.delete(_products.doc(copy.id));
+        removed++;
+      }
+      await _settle(batch.commit());
+    }
+    return removed;
+  }
+
+  /// The product already in the shop with this name and size, if any.
+  Product? existing(String name, String size) {
+    final k = Product.keyOf(name, size);
+    return products.where((p) => p.key == k).firstOrNull;
+  }
+
   Future<void> deleteProduct(String id) => _settle(_products.doc(id).delete());
 
   /// Goes up each time the owner saves a log, so Poddy can cheer.

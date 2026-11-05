@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../auth_service.dart';
 import '../brand.dart';
 import '../core/repo.dart';
+import '../poddy/ask.dart';
 import '../poddy/poddy.dart';
 import 'buy.dart';
 import 'home.dart';
@@ -28,6 +29,10 @@ class ShellState extends State<Shell> {
   bool _welcomed = false;
   bool _touring = false;
 
+  /// Steps of a short "Show me" tour Poddy gives after answering a question;
+  /// null means the first-visit orientation.
+  List<TourStep>? _guide;
+
   // What the orientation tour lights up.
   final _bodyKey = GlobalKey(), _logKey = GlobalKey(), _buyKey = GlobalKey(), _stockKey = GlobalKey(), _settingsKey = GlobalKey();
 
@@ -43,6 +48,13 @@ class ShellState extends State<Shell> {
   }
 
   Future<void> _endTour() async {
+    if (_guide != null) {
+      setState(() {
+        _guide = null;
+        _touring = false;
+      });
+      return;
+    }
     setState(() {
       _touring = false;
       _welcomed = true;
@@ -60,6 +72,46 @@ class ShellState extends State<Shell> {
         TourStep('Settings: your restock day and campus events.', target: _settingsKey),
         const TourStep('Start by adding what you sell. Tap me anytime for help!'),
       ];
+
+  /// Ask Poddy: a typed question; if Poddy says where it's done, go there and show how.
+  Future<void> _ask() async {
+    final section = await showAskPoddy(context, widget.repo);
+    if (section != null && mounted) showSection(section);
+  }
+
+  /// Takes the owner to the right place and walks them through it in 2-3 steps.
+  void showSection(String section) {
+    final settings = TourStep('Tap Settings, the gear at the top right.', target: _settingsKey);
+    final (int? tab, String? mode, List<TourStep> steps) = switch (section) {
+      'log_sold' => (1, 'sale', [TourStep('This is Log. Sold is picked at the top.', target: _bodyKey), TourStep('Tap + for each one sold today.', target: _bodyKey), TourStep('Then tap Save at the bottom.', target: _bodyKey)]),
+      'log_count' => (1, 'count', [TourStep('This is Log, on Count.', target: _bodyKey), TourStep('Type how many are on the shelf now, then Save.', target: _bodyKey)]),
+      'log_bought' => (1, 'restock', [TourStep('This is Log, on Bought.', target: _bodyKey), TourStep('Tap + for what you bought and type the price, then Save.', target: _bodyKey)]),
+      'add_product' => (1, null, [TourStep('Scroll to the bottom of Log and tap "Add a product".', target: _bodyKey), TourStep('Type it, speak it, or take a photo. Then check and Save.', target: _bodyKey)]),
+      'delete_product' => (3, null, [TourStep('On Stock, tap the product you want to remove.', target: _bodyKey), TourStep('Then tap the bin icon at the top right, and Delete.', target: _bodyKey)]),
+      'buy' => (2, null, [TourStep('This is your buying list for the week.', target: _bodyKey), TourStep('Bought them? Tap "Record what I bought".', target: _bodyKey)]),
+      'budget' => (2, null, [TourStep('Type the cash you have at the top.', target: _bodyKey), TourStep('The most urgent items come first.', target: _bodyKey)]),
+      'stock' || 'forecast' => (3, null, [TourStep('Each line is one product over time.', target: _bodyKey), TourStep('Tap a product to see if I was right.', target: _bodyKey)]),
+      'home' => (0, null, [TourStep('Home shows what is running low and what to buy.', target: _bodyKey)]),
+      'duplicates' => (null, null, [settings, const TourStep('Under Products, tap "Remove duplicates".')]),
+      'restock_day' => (null, null, [settings, const TourStep('Under Your shop, pick your usual restock day.')]),
+      'calendar' => (null, null, [settings, const TourStep('Under Campus calendar, tap Add for exams or breaks.')]),
+      'shop_details' => (null, null, [settings, const TourStep('Tap your shop name to change its details.')]),
+      'privacy' => (null, null, [settings, const TourStep('Under Account, tap Privacy.')]),
+      'delete_account' => (null, null, [settings, const TourStep('Scroll to the very bottom and tap Delete account.')]),
+      'sign_out' => (null, null, [settings, const TourStep('Under Account, tap Sign out.')]),
+      _ => (null, null, <TourStep>[]),
+    };
+    if (steps.isEmpty) return;
+    setState(() {
+      if (tab != null) {
+        if (_tab == 0) _welcomed = true;
+        _tab = tab;
+      }
+      if (mode != null) _logMode = mode;
+      _guide = steps;
+      _touring = true;
+    });
+  }
 
   /// Other screens use this to jump to a tab, e.g. "Log today" or "Record what I bought".
   void go(int tab, {String? logMode}) => setState(() {
@@ -86,6 +138,7 @@ class ShellState extends State<Shell> {
       flashTick: repo.savedTick,
       flashLine: 'Saved. Nice work!',
       lift: 24,
+      onAsk: _ask,
     );
   }
 
@@ -129,7 +182,7 @@ class ShellState extends State<Shell> {
           ),
         );
         if (!_touring) return scaffold;
-        return Stack(children: [scaffold, Positioned.fill(child: PoddyTour(steps: _tour, onDone: _endTour))]);
+        return Stack(children: [scaffold, Positioned.fill(child: PoddyTour(key: ValueKey(_guide), steps: _guide ?? _tour, onDone: _endTour))]);
       },
     );
   }
