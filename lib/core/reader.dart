@@ -33,9 +33,13 @@ class ProductDraft {
 /// Reads products from what the owner said or photographed, using Gemini through
 /// Firebase AI Logic. It never saves anything: the owner checks every field first.
 class ProductReader {
-  /// Tried in order: when Google says a model is busy, benj waits a moment, retries,
-  /// then falls back to the lighter model (both stable, Firebase AI Logic models page).
-  static const models = ['gemini-3.8-flash', 'gemini-3.5-flash-lite'];
+  /// Both stable models from the Firebase AI Logic models page. The free tier gives each
+  /// model its own small daily allowance (gemini-3.8-flash: 20 requests a day), so speech,
+  /// which is easy, starts on the light model, and photos start on the stronger one.
+  /// If one is busy or out of allowance, the other takes over.
+  static const strong = 'gemini-3.8-flash', light = 'gemini-3.5-flash-lite';
+  static const speechModels = [light, strong];
+  static const photoModels = [strong, light];
 
   static final _schema = Schema.object(properties: {
     'products': Schema.array(
@@ -67,8 +71,9 @@ class ProductReader {
         generationConfig: GenerationConfig(responseMimeType: 'application/json', responseSchema: _schema, temperature: 0),
       );
 
-  /// Each model gets two tries, a second apart, before moving to the next.
-  static Future<GenerateContentResponse> _generate(List<Content> content, Duration timeout) async {
+  /// Each model gets two tries, a second apart, before moving to the next. When the daily
+  /// allowance is used up, retrying cannot help, so it moves on straight away.
+  static Future<GenerateContentResponse> _generate(List<String> models, List<Content> content, Duration timeout) async {
     Object? last;
     for (final name in models) {
       for (var attempt = 0; attempt < 2; attempt++) {
@@ -76,6 +81,7 @@ class ProductReader {
           return await _model(name).generateContent(content).timeout(timeout);
         } catch (e) {
           last = e;
+          if (e is QuotaExceeded || '$e'.contains('quota')) break;
           await Future<void>.delayed(const Duration(milliseconds: 1200));
         }
       }
@@ -96,13 +102,13 @@ class ProductReader {
 
   /// "Rice, one kilo, bag, thirty on the shelf, I pay eighteen cedis" -> one draft.
   static Future<List<ProductDraft>> fromSpeech(String transcript) async {
-    final res = await _generate([Content.text('$_rules\n\nThe owner said: "$transcript"')], const Duration(seconds: 30));
+    final res = await _generate(speechModels, [Content.text('$_rules\n\nThe owner said: "$transcript"')], const Duration(seconds: 30));
     return _parse(res.text);
   }
 
   /// A product label, a shelf, or a stock-book page -> one or more drafts.
   static Future<List<ProductDraft>> fromPhoto(Uint8List bytes, String mimeType) async {
-    final res = await _generate([
+    final res = await _generate(photoModels, [
       Content.multi([
         TextPart('$_rules\n\nThis photo is a product, its label or price tag, a shelf, or a handwritten stock book page. '
             'List each distinct product you can read. For a stock book, use the latest counts and prices written.'),
