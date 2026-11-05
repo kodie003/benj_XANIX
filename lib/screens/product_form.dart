@@ -197,7 +197,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       final found = await ProductReader.fromPhoto(bytes, x.mimeType ?? 'image/jpeg');
       setState(() {
         if (found.isEmpty) {
-          _note = "I couldn't read a product in that photo. Try closer, in good light, or type it below.";
+          _note = "I couldn't find a product in that photo. Try closer, in good light, or type it below.";
         } else if (found.length == 1 && _inShop(found.first)) {
           _fill(found.first);
           _note = '${found.first.label} is already in your shop, so I did not add it again.';
@@ -205,7 +205,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
           _fill(found.first);
           _note = found.first.seen > 1
               ? 'I saw ${found.first.label} ${found.first.seen} times and added the counts. Check the count, then save.'
-              : 'I filled in the form below. Check it, then save.';
+              : 'I filled in the form below. The count is only what the photo shows, so change it if you have more, then save.';
         } else {
           _found = found;
           _pick.addAll([for (final (i, d) in found.indexed) if (!_inShop(d)) i]);
@@ -214,7 +214,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
             ..addAll({for (final (i, d) in found.indexed) i: TextEditingController(text: _num(d.onHand))});
           final merged = found.where((d) => d.seen > 1).length;
           final there = found.where(_inShop).length;
-          _note = 'I found ${found.length} products. Check the counts and untick any that are wrong.'
+          _note = 'I found ${found.length} products. Counts are only what the photo shows, so change them if you have more, and untick any that are wrong.'
               '${merged > 0 ? ' Some appeared more than once, so I added their counts.' : ''}'
               '${there > 0 ? ' $there ${there == 1 ? 'is' : 'are'} already in your shop.' : ''}';
         }

@@ -69,24 +69,39 @@ class ProductReader {
       'Prices are in Ghana cedis (GHS, "cedis", "ghana"). Numbers may be spoken as words or in local English. '
       'Pick unit from: bag, pack, carton, crate, bottle, tin, piece, olonka. '
       '"Olonka" is the Ghanaian tin measure for grains such as rice, gari and beans; use it when the owner says olonka. '
-      'Only include what is actually said or clearly written. Never invent prices or counts. '
-      'In a stock book line like "Rice 1kg - 30 bags - GHS 18", 30 is onHand and 18 is costPrice. '
-      'A single price with no other wording is what the owner pays (costPrice); use sellPrice only when it says sell, sale or selling. '
-      'If nothing usable is there, return an empty products list.';
+      'The name is the product and brand only, never the unit or size ("Milo", not "Milo tin"). '
+      'Never invent prices. If nothing usable is there, return an empty products list.';
+
+  static const _speechRules = 'Only include what the owner actually said. Never invent counts.';
+
+  static const _photoRules =
+      'Look at this photo and work out which kind it is, then list every distinct product:\n'
+      '1. Products, a shelf or a package: identify each product from its packaging, using the brand and product name you can see or recognise '
+      '(for example "Milo", "Peak milk", "Coca-Cola"). Give the size only if it is printed and readable. '
+      'onHand is how many units of that product you can see in the photo. costPrice and sellPrice are null unless a price tag is visible.\n'
+      '2. A handwritten stock book or list: read each line. In a line like "Rice 1kg - 30 bags - GHS 18", 30 is onHand and 18 is costPrice. '
+      'A single price with no other wording is costPrice; use sellPrice only when it says sell, sale or selling.\n'
+      'Do not list things that are not products for sale.';
 
   static GenerativeModel _model(String name) => FirebaseAI.googleAI().generativeModel(
         model: name,
         generationConfig: GenerationConfig(responseMimeType: 'application/json', responseSchema: _schema, temperature: 0),
       );
 
-  /// Each model gets two tries, a second apart, before moving to the next. When the daily
-  /// allowance is used up, retrying cannot help, so it moves on straight away.
-  static Future<GenerateContentResponse> _generate(List<String> models, List<Content> content, Duration timeout) async {
+  /// Asks each model in turn. A busy model gets a second try; when its daily allowance is
+  /// used up, retrying cannot help, so it moves on. An empty answer also moves on, because
+  /// one model may read what the other misses. Only fails if no model answered at all.
+  static Future<List<ProductDraft>> _read(List<String> models, List<Content> content, Duration timeout) async {
     Object? last;
+    var answered = false;
     for (final name in models) {
       for (var attempt = 0; attempt < 2; attempt++) {
         try {
-          return await _model(name).generateContent(content).timeout(timeout);
+          final res = await _model(name).generateContent(content).timeout(timeout);
+          answered = true;
+          final found = _parse(res.text);
+          if (found.isNotEmpty) return found;
+          break;
         } catch (e) {
           last = e;
           if (e is QuotaExceeded || '$e'.contains('quota')) break;
@@ -94,6 +109,7 @@ class ProductReader {
         }
       }
     }
+    if (answered) return [];
     throw last ?? StateError('No model answered');
   }
 
@@ -110,20 +126,15 @@ class ProductReader {
 
   /// "Rice, one kilo, bag, thirty on the shelf, I pay eighteen cedis" -> one draft.
   static Future<List<ProductDraft>> fromSpeech(String transcript) async {
-    final res = await _generate(speechModels, [Content.text('$_rules\n\nThe owner said: "$transcript"')], const Duration(seconds: 30));
-    return _parse(res.text);
+    return _read(speechModels, [Content.text('$_rules $_speechRules\n\nThe owner said: "$transcript"')], const Duration(seconds: 30));
   }
 
   /// A product label, a shelf, or a stock-book page -> one or more drafts.
   static Future<List<ProductDraft>> fromPhoto(Uint8List bytes, String mimeType) async {
-    final res = await _generate(photoModels, [
-      Content.multi([
-        TextPart('$_rules\n\nThis photo is a product, its label or price tag, a shelf, or a handwritten stock book page. '
-            'List each distinct product you can read. For a stock book, use the latest counts and prices written.'),
-        InlineDataPart(mimeType, bytes),
-      ]),
+    final found = await _read(photoModels, [
+      Content.multi([TextPart('$_rules\n\n$_photoRules'), InlineDataPart(mimeType, bytes)]),
     ], const Duration(seconds: 45));
-    return mergeSame(_parse(res.text));
+    return mergeSame(found);
   }
 
   /// The same product written more than once on a page (e.g. two lines of Rice 1 kg)
