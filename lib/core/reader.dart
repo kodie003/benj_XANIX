@@ -48,11 +48,13 @@ class ProductReader {
           'name': Schema.string(description: 'Product name without the size, e.g. "Rice", "Milo", "Indomie noodles".'),
           'size': Schema.string(description: 'Size or weight if stated, e.g. "1 kg", "4.5 kg", "500 ml". Empty if none.'),
           'unit': Schema.enumString(enumValues: kUnits, description: 'How it is counted.'),
-          'onHand': Schema.number(description: 'How many are in stock / on the shelf now, if stated.'),
-          'costPrice': Schema.number(description: 'What the owner pays for one unit, in Ghana cedis, if stated.'),
-          'sellPrice': Schema.number(description: 'What the owner sells one unit for, in Ghana cedis, if stated.'),
+          // Required but nullable: the model must answer each one (a number, or null when it
+          // really isn't there) instead of quietly leaving counts and prices out.
+          'onHand': Schema.number(nullable: true, description: 'How many are in stock / on the shelf now. In "30 bags" it is 30. null if not stated.'),
+          'costPrice': Schema.number(nullable: true, description: 'What the owner pays for one unit, in Ghana cedis. In "GHS 18" or "I buy it eighteen cedis" it is 18. null if not stated.'),
+          'sellPrice': Schema.number(nullable: true, description: 'What the owner sells one unit for, in Ghana cedis, only when selling is mentioned. null otherwise.'),
         },
-        optionalProperties: ['size', 'unit', 'onHand', 'costPrice', 'sellPrice'],
+        optionalProperties: ['size', 'unit'],
       ),
     ),
   });
