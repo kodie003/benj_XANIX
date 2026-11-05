@@ -9,7 +9,6 @@ import 'poddy.dart';
 Future<String?> showAskPoddy(BuildContext context, ShopRepo repo) => showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      showDragHandle: true,
       builder: (_) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: _AskSheet(repo: repo),
@@ -43,9 +42,10 @@ class _AskSheetState extends State<_AskSheet> {
     });
     try {
       final a = await PoddyAssistant.ask(q, widget.repo);
-      setState(() => _answer = a);
+      if (mounted) setState(() => _answer = a);
     } catch (_) {
-      setState(() => _error = "I can't answer right now. Check your connection, or tap Tips.");
+      // The owner may have tapped away while Poddy was thinking.
+      if (mounted) setState(() => _error = "I can't answer right now. Check your connection, or tap Tips.");
     }
     if (mounted) setState(() => _busy = false);
   }
@@ -55,11 +55,17 @@ class _AskSheetState extends State<_AskSheet> {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final a = _answer;
-    return SafeArea(
+    // A tap anywhere closes the sheet. The field, chips and buttons keep their own taps.
+    void close() => Navigator.pop(context);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: close,
+      child: SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-          SizedBox(height: 120, child: PoddyView(mood: _busy ? 'present' : (a != null ? 'welcome' : 'hello'))),
+          const SheetHandle(),
+          SizedBox(height: 120, child: PoddyView(mood: _busy ? 'present' : (a != null ? 'welcome' : 'hello'), onTap: close)),
           Text('Need something?', textAlign: TextAlign.center, style: text.titleLarge),
           const SizedBox(height: 10),
           if (a == null && !_busy)
@@ -97,6 +103,7 @@ class _AskSheetState extends State<_AskSheet> {
             ],
           ],
         ]),
+      ),
       ),
     );
   }

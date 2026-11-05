@@ -91,6 +91,11 @@ class _PoddyPeekState extends State<PoddyPeek> {
     _timer = Timer(Duration(milliseconds: 2200 + 60 * lines[i].length), () => _say(lines, i: i + 1));
   }
 
+  /// Closes "Need something?". Any tap outside its buttons lands here.
+  void _dismiss() {
+    if (_asking) _say(const []);
+  }
+
   void _tapped() {
     _timer?.cancel();
     if (_asking) {
@@ -110,12 +115,16 @@ class _PoddyPeekState extends State<PoddyPeek> {
     if (widget.tips.isEmpty) return;
     showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Quick tips', style: Theme.of(ctx).textTheme.titleLarge),
+      // A tap anywhere closes the tips, on the sheet as well as around it.
+      builder: (ctx) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => Navigator.pop(ctx),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const SheetHandle(),
+              Text('Quick tips', style: Theme.of(ctx).textTheme.titleLarge),
             const SizedBox(height: 8),
             for (final t in widget.tips)
               Padding(
@@ -126,7 +135,8 @@ class _PoddyPeekState extends State<PoddyPeek> {
                   Expanded(child: Text(t, style: Theme.of(ctx).textTheme.bodyLarge)),
                 ]),
               ),
-          ]),
+            ]),
+          ),
         ),
       ),
     );
@@ -147,10 +157,16 @@ class _PoddyPeekState extends State<PoddyPeek> {
     const curve = Curves.easeOutBack;
     final poddy = SizedBox(width: _w, height: _h, child: PoddyView(mood: widget.mood, flash: 'welcome', flashTick: widget.flashTick, onTap: _tapped));
 
+    // While "Need something?" is open, a tap on the screen closes it and does nothing else.
+    final barrier = Positioned.fill(
+      child: Semantics(label: 'Close Poddy help', button: true, child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: _dismiss)),
+    );
+
     Widget body;
     switch (widget.side) {
       case PeekSide.right:
         body = Stack(children: [
+          if (_asking) barrier,
           AnimatedPositioned(
             duration: dur,
             curve: curve,
@@ -162,6 +178,7 @@ class _PoddyPeekState extends State<PoddyPeek> {
         ]);
       case PeekSide.left:
         body = Stack(children: [
+          if (_asking) barrier,
           AnimatedPositioned(
             duration: dur,
             curve: curve,
@@ -173,6 +190,7 @@ class _PoddyPeekState extends State<PoddyPeek> {
         ]);
       case PeekSide.bottom:
         body = Stack(children: [
+          if (_asking) barrier,
           AnimatedPositioned(
             duration: dur,
             curve: curve,
@@ -183,8 +201,9 @@ class _PoddyPeekState extends State<PoddyPeek> {
           _bubble(right: 28 + _w * 0.75, bottom: _h * shown * 0.7, alignRight: true),
         ]);
     }
-    // Only Poddy and his bubble take taps; the rest of the screen stays usable.
-    return Positioned.fill(child: ClipRect(child: body));
+    // Normally only Poddy and his bubble take taps, so the screen stays usable. The
+    // TapRegion also closes help when the tap is outside this area, like the bottom bar.
+    return Positioned.fill(child: TapRegion(onTapOutside: (_) => _dismiss(), child: ClipRect(child: body)));
   }
 
   Widget _bubble({double? left, double? right, required double bottom, bool alignRight = false}) {
@@ -202,7 +221,9 @@ class _PoddyPeekState extends State<PoddyPeek> {
             : ConstrainedBox(
                 key: ValueKey(line),
                 constraints: const BoxConstraints(maxWidth: 200),
-                child: Material(
+                child: GestureDetector(
+                  onTap: _asking ? _dismiss : null,
+                  child: Material(
                   color: scheme.surface,
                   elevation: 3,
                   borderRadius: BorderRadius.only(
@@ -238,9 +259,26 @@ class _PoddyPeekState extends State<PoddyPeek> {
                         ),
                     ]),
                   ),
+                  ),
                 ),
               ),
       ),
     );
   }
+}
+
+/// The small bar at the top of a sheet. It's drawn inside the sheet's content so a tap
+/// on it closes the sheet like a tap anywhere else (Flutter's built-in one doesn't).
+class SheetHandle extends StatelessWidget {
+  const SheetHandle({super.key});
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Container(
+          width: 32,
+          height: 4,
+          margin: const EdgeInsets.symmetric(vertical: 18),
+          decoration: BoxDecoration(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(2)),
+        ),
+      );
 }
