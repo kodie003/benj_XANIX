@@ -91,6 +91,12 @@ const privacySections = <(String, String)>[
         'To keep sign-in safe, Google Firebase may also process technical details such as your IP address and browser.',
   ),
   (
+    'Ask Poddy',
+    'When you type a question to Poddy, the question and a short summary of your shop (product names, how many are on the shelf, '
+        'what is running low) are sent to Google Gemini through Firebase to answer it. Nothing else from your records is sent, '
+        'and benj does not keep the conversation.',
+  ),
+  (
     'Speaking and photos',
     'Only when you choose Speak or Photo while adding a product. '
         'Speech is turned into words by your browser (on Android, Chrome uses Google for this). '

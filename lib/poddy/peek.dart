@@ -21,7 +21,11 @@ class PoddyPeek extends StatefulWidget {
     this.flashTick = 0,
     this.flashLine,
     this.lift = 96,
+    this.onAsk,
   });
+
+  /// Opens "Ask Poddy" (typed questions answered by Gemini). Null hides the button.
+  final VoidCallback? onAsk;
 
   final PeekSide side;
   final String mood;
@@ -96,7 +100,7 @@ class _PoddyPeekState extends State<PoddyPeek> {
     setState(() {
       _out = true;
       _asking = true;
-      _line = 'Need help?';
+      _line = 'Need something?';
     });
     _timer = Timer(const Duration(seconds: 7), () => _say(const []));
   }
@@ -211,14 +215,26 @@ class _PoddyPeekState extends State<PoddyPeek> {
                     padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                       Text(line, style: Theme.of(context).textTheme.titleSmall),
-                      if (_asking && widget.tips.isNotEmpty)
+                      if (_asking)
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
-                          child: FilledButton.tonal(
-                            onPressed: _showTips,
-                            style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
-                            child: const Text('Tips'),
-                          ),
+                          child: Wrap(spacing: 6, children: [
+                            if (widget.onAsk != null)
+                              FilledButton(
+                                onPressed: () {
+                                  _say(const []);
+                                  widget.onAsk!();
+                                },
+                                style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+                                child: const Text('Ask Poddy'),
+                              ),
+                            if (widget.tips.isNotEmpty)
+                              FilledButton.tonal(
+                                onPressed: _showTips,
+                                style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+                                child: const Text('Tips'),
+                              ),
+                          ]),
                         ),
                     ]),
                   ),

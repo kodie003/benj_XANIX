@@ -11,6 +11,11 @@ class ProductDraft {
   String name, size, unit;
   double? onHand, costPrice, sellPrice;
 
+  /// How many lines of the photo showed this product (2+ means counts were added up).
+  int seen = 1;
+
+  String get key => Product.keyOf(name, size);
+
   String get label => size.isEmpty ? name : '$name $size';
 
   factory ProductDraft.fromJson(Map<String, dynamic> j) {
@@ -62,7 +67,8 @@ class ProductReader {
   static const _rules =
       'You help a small shop owner in Ghana add the products they sell to a stock app. '
       'Prices are in Ghana cedis (GHS, "cedis", "ghana"). Numbers may be spoken as words or in local English. '
-      'Pick unit from: ${'bag, pack, carton, crate, bottle, tin, piece'}. '
+      'Pick unit from: bag, pack, carton, crate, bottle, tin, piece, olonka. '
+      '"Olonka" is the Ghanaian tin measure for grains such as rice, gari and beans; use it when the owner says olonka. '
       'Only include what is actually said or clearly written. Never invent prices or counts. '
       'In a stock book line like "Rice 1kg - 30 bags - GHS 18", 30 is onHand and 18 is costPrice. '
       'A single price with no other wording is what the owner pays (costPrice); use sellPrice only when it says sell, sale or selling. '
@@ -117,6 +123,25 @@ class ProductReader {
         InlineDataPart(mimeType, bytes),
       ]),
     ], const Duration(seconds: 45));
-    return _parse(res.text);
+    return mergeSame(_parse(res.text));
+  }
+
+  /// The same product written more than once on a page (e.g. two lines of Rice 1 kg)
+  /// becomes one draft with the counts added up; the owner checks the total.
+  static List<ProductDraft> mergeSame(List<ProductDraft> drafts) {
+    final byKey = <String, ProductDraft>{};
+    for (final d in drafts) {
+      final kept = byKey[d.key];
+      if (kept == null) {
+        byKey[d.key] = d;
+        continue;
+      }
+      kept.seen++;
+      if (d.onHand != null) kept.onHand = (kept.onHand ?? 0) + d.onHand!;
+      kept.costPrice ??= d.costPrice;
+      kept.sellPrice ??= d.sellPrice;
+      if (kept.unit.isEmpty) kept.unit = d.unit;
+    }
+    return byKey.values.toList();
   }
 }

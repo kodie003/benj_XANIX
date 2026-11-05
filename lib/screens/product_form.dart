@@ -43,6 +43,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
   // Photo
   List<ProductDraft> _found = [];
   final _pick = <int>{};
+  final _counts = <int, TextEditingController>{};
 
   static String _num(double? v) => v == null ? '' : (v == v.roundToDouble() ? v.round().toString() : v.toString());
   static double? _parse(String s) => s.trim().isEmpty ? null : double.tryParse(s.trim());
@@ -60,15 +61,50 @@ class _ProductFormPageState extends State<ProductFormPage> {
         warningLevel: _parse(_warn.text),
       );
 
+  /// "Rice 1 kg is already in your shop", or null.
+  String? _alreadyThere() {
+    if (_editing) return null;
+    final p = widget.repo.existing(_name.text.trim(), _size.text.trim());
+    return p == null ? null : '${p.label} is already in your shop. Change its count on Log, or edit it from Stock.';
+  }
+
   Future<bool> _save() async {
     if (_name.text.trim().isEmpty) return _fail('Give the product a name.');
     if (_unit.isEmpty) return _fail('Pick how it comes: bag, pack, carton…');
+    final dup = _alreadyThere();
+    if (dup != null) return _fail(dup);
     if (_editing) {
       await widget.repo.saveProduct(_product());
     } else {
       await widget.repo.addProduct(_product(), _parse(_onHand.text) ?? 0);
     }
     return true;
+  }
+
+  /// "Save, add another": take what is typed now, clear the form at once, and let the
+  /// save finish in the background. (Clearing after a slow save used to wipe what the
+  /// owner had already started typing for the next product.)
+  Future<void> _saveAndNext() async {
+    if (_name.text.trim().isEmpty) {
+      _fail('Give the product a name.');
+      return;
+    }
+    if (_unit.isEmpty) {
+      _fail('Pick how it comes: bag, pack, carton…');
+      return;
+    }
+    final dup = _alreadyThere();
+    if (dup != null) {
+      _fail(dup);
+      return;
+    }
+    final product = _product();
+    final onHand = _parse(_onHand.text) ?? 0;
+    setState(() {
+      _added++;
+      _clear();
+    });
+    await widget.repo.addProduct(product, onHand);
   }
 
   bool _fail(String m) {
@@ -162,13 +198,25 @@ class _ProductFormPageState extends State<ProductFormPage> {
       setState(() {
         if (found.isEmpty) {
           _note = "I couldn't read a product in that photo. Try closer, in good light, or type it below.";
+        } else if (found.length == 1 && _inShop(found.first)) {
+          _fill(found.first);
+          _note = '${found.first.label} is already in your shop, so I did not add it again.';
         } else if (found.length == 1) {
           _fill(found.first);
-          _note = 'I filled in the form below. Check it, then save.';
+          _note = found.first.seen > 1
+              ? 'I saw ${found.first.label} ${found.first.seen} times and added the counts. Check the count, then save.'
+              : 'I filled in the form below. Check it, then save.';
         } else {
           _found = found;
-          _pick.addAll(List.generate(found.length, (i) => i));
-          _note = 'I found ${found.length} products. Untick any that are wrong.';
+          _pick.addAll([for (final (i, d) in found.indexed) if (!_inShop(d)) i]);
+          _counts
+            ..clear()
+            ..addAll({for (final (i, d) in found.indexed) i: TextEditingController(text: _num(d.onHand))});
+          final merged = found.where((d) => d.seen > 1).length;
+          final there = found.where(_inShop).length;
+          _note = 'I found ${found.length} products. Check the counts and untick any that are wrong.'
+              '${merged > 0 ? ' Some appeared more than once, so I added their counts.' : ''}'
+              '${there > 0 ? ' $there ${there == 1 ? 'is' : 'are'} already in your shop.' : ''}';
         }
       });
     } catch (_) {
@@ -177,13 +225,31 @@ class _ProductFormPageState extends State<ProductFormPage> {
     if (mounted) setState(() => _reading = false);
   }
 
+  bool _inShop(ProductDraft d) => widget.repo.existing(d.name, d.size) != null;
+
+  /// Drops every product that is already in the shop from the photo's list.
+  void _removeFoundDuplicates() {
+    final keep = [for (final (i, d) in _found.indexed) if (!_inShop(d)) (d, _counts[i]?.text ?? '')];
+    final removed = _found.length - keep.length;
+    setState(() {
+      _found = [for (final (d, _) in keep) d];
+      _counts
+        ..clear()
+        ..addAll({for (final (i, (_, c)) in keep.indexed) i: TextEditingController(text: c)});
+      _pick
+        ..clear()
+        ..addAll(List.generate(_found.length, (i) => i));
+      _note = 'Removed $removed ${removed == 1 ? 'duplicate' : 'duplicates'}. Check the rest, then add them.';
+    });
+  }
+
   Future<void> _addFound() async {
     var n = 0;
     for (final i in _pick.toList()..sort()) {
       final d = _found[i];
       await widget.repo.addProduct(
         Product(id: '', name: d.name, unit: d.unit.isEmpty ? 'piece' : d.unit, size: d.size, costPrice: d.costPrice, sellPrice: d.sellPrice),
-        d.onHand ?? 0,
+        _parse(_counts[i]?.text ?? '') ?? 0,
       );
       n++;
     }
@@ -292,6 +358,15 @@ class _ProductFormPageState extends State<ProductFormPage> {
       );
 
   Widget _foundList(TextTheme text) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (_found.any(_inShop))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: OutlinedButton.icon(
+              onPressed: _removeFoundDuplicates,
+              icon: const Icon(Icons.layers_clear_outlined),
+              label: Text('Remove duplicates (${_found.where(_inShop).length})'),
+            ),
+          ),
         Card(
           child: Column(children: [
             for (final (i, d) in _found.indexed)
@@ -299,12 +374,28 @@ class _ProductFormPageState extends State<ProductFormPage> {
                 value: _pick.contains(i),
                 onChanged: (v) => setState(() => v == true ? _pick.add(i) : _pick.remove(i)),
                 title: Text(d.label, style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text([
-                  if (d.unit.isNotEmpty) d.unit,
-                  if (d.onHand != null) '${_num(d.onHand)} on the shelf',
-                  if (d.costPrice != null) 'you pay GHS ${_num(d.costPrice)}',
-                  if (d.sellPrice != null) 'sells for GHS ${_num(d.sellPrice)}',
-                ].join(' · ')),
+                subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text([
+                    if (d.unit.isNotEmpty) d.unit,
+                    if (d.onHand != null) '${_num(d.onHand)} on the shelf',
+                    if (d.costPrice != null) 'you pay GHS ${_num(d.costPrice)}',
+                    if (d.sellPrice != null) 'sells for GHS ${_num(d.sellPrice)}',
+                  ].join(' · ')),
+                  if (_inShop(d))
+                    Text('Already in your shop', style: TextStyle(color: Theme.of(context).colorScheme.error, fontWeight: FontWeight.w600)),
+                  if (d.seen > 1)
+                    Text('Seen ${d.seen} times on the page: counts added. Check the total.',
+                        style: TextStyle(color: Theme.of(context).colorScheme.error, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: 160,
+                    child: TextField(
+                      controller: _counts[i],
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(labelText: 'On the shelf', isDense: true, suffixText: d.unit.isEmpty ? null : '${d.unit}s', border: const OutlineInputBorder()),
+                    ),
+                  ),
+                ]),
               ),
           ]),
         ),
@@ -355,14 +446,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         Row(children: [
           Expanded(
             child: OutlinedButton(
-              onPressed: () async {
-                if (await _save()) {
-                  setState(() {
-                    _added++;
-                    _clear();
-                  });
-                }
-              },
+              onPressed: _saveAndNext,
               child: const Padding(padding: EdgeInsets.all(12), child: Text('Save, add another')),
             ),
           ),
