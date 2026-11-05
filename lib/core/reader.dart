@@ -30,7 +30,9 @@ class ProductDraft {
 /// Reads products from what the owner said or photographed, using Gemini through
 /// Firebase AI Logic. It never saves anything: the owner checks every field first.
 class ProductReader {
-  static const model = 'gemini-3.8-flash';
+  /// Tried in order: when Google says a model is busy, benj waits a moment, retries,
+  /// then falls back to the lighter model (both stable, Firebase AI Logic models page).
+  static const models = ['gemini-3.8-flash', 'gemini-3.5-flash-lite'];
 
   static final _schema = Schema.object(properties: {
     'products': Schema.array(
@@ -55,10 +57,26 @@ class ProductReader {
       'Only include what is actually said or clearly written. Never invent prices or counts. '
       'If nothing usable is there, return an empty products list.';
 
-  static GenerativeModel _model() => FirebaseAI.googleAI().generativeModel(
-        model: model,
+  static GenerativeModel _model(String name) => FirebaseAI.googleAI().generativeModel(
+        model: name,
         generationConfig: GenerationConfig(responseMimeType: 'application/json', responseSchema: _schema, temperature: 0),
       );
+
+  /// Each model gets two tries, a second apart, before moving to the next.
+  static Future<GenerateContentResponse> _generate(List<Content> content, Duration timeout) async {
+    Object? last;
+    for (final name in models) {
+      for (var attempt = 0; attempt < 2; attempt++) {
+        try {
+          return await _model(name).generateContent(content).timeout(timeout);
+        } catch (e) {
+          last = e;
+          await Future<void>.delayed(const Duration(milliseconds: 1200));
+        }
+      }
+    }
+    throw last ?? StateError('No model answered');
+  }
 
   static List<ProductDraft> _parse(String? text) {
     final raw = (text ?? '').replaceAll('```json', '').replaceAll('```', '').trim();
@@ -73,23 +91,19 @@ class ProductReader {
 
   /// "Rice, one kilo, bag, thirty on the shelf, I pay eighteen cedis" -> one draft.
   static Future<List<ProductDraft>> fromSpeech(String transcript) async {
-    final res = await _model()
-        .generateContent([Content.text('$_rules\n\nThe owner said: "$transcript"')])
-        .timeout(const Duration(seconds: 40));
+    final res = await _generate([Content.text('$_rules\n\nThe owner said: "$transcript"')], const Duration(seconds: 30));
     return _parse(res.text);
   }
 
   /// A product label, a shelf, or a stock-book page -> one or more drafts.
   static Future<List<ProductDraft>> fromPhoto(Uint8List bytes, String mimeType) async {
-    final res = await _model()
-        .generateContent([
-          Content.multi([
-            TextPart('$_rules\n\nThis photo is a product, its label or price tag, a shelf, or a handwritten stock book page. '
-                'List each distinct product you can read. For a stock book, use the latest counts and prices written.'),
-            InlineDataPart(mimeType, bytes),
-          ]),
-        ])
-        .timeout(const Duration(seconds: 60));
+    final res = await _generate([
+      Content.multi([
+        TextPart('$_rules\n\nThis photo is a product, its label or price tag, a shelf, or a handwritten stock book page. '
+            'List each distinct product you can read. For a stock book, use the latest counts and prices written.'),
+        InlineDataPart(mimeType, bytes),
+      ]),
+    ], const Duration(seconds: 45));
     return _parse(res.text);
   }
 }

@@ -58,3 +58,8 @@ __pycache__/
 
 .vercel
 .env*
+
+# Coding-assistant tooling installed by firebase init (not part of the app)
+.agents/
+.claude/
+skills-lock.json
