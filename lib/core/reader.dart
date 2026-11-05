@@ -16,8 +16,11 @@ class ProductDraft {
   factory ProductDraft.fromJson(Map<String, dynamic> j) {
     double? n(Object? v) => v is num ? v.toDouble() : double.tryParse('${v ?? ''}');
     final unit = '${j['unit'] ?? ''}'.toLowerCase().trim();
+    // "rice" said aloud becomes "Rice" in the list.
+    final rawName = '${j['name'] ?? ''}'.trim();
+    final name = rawName.isEmpty ? '' : rawName[0].toUpperCase() + rawName.substring(1);
     return ProductDraft(
-      name: '${j['name'] ?? ''}'.trim(),
+      name: name,
       size: '${j['size'] ?? ''}'.trim(),
       unit: kUnits.contains(unit) ? unit : '',
       onHand: n(j['onHand']),
@@ -55,6 +58,8 @@ class ProductReader {
       'Prices are in Ghana cedis (GHS, "cedis", "ghana"). Numbers may be spoken as words or in local English. '
       'Pick unit from: ${'bag, pack, carton, crate, bottle, tin, piece'}. '
       'Only include what is actually said or clearly written. Never invent prices or counts. '
+      'In a stock book line like "Rice 1kg - 30 bags - GHS 18", 30 is onHand and 18 is costPrice. '
+      'A single price with no other wording is what the owner pays (costPrice); use sellPrice only when it says sell, sale or selling. '
       'If nothing usable is there, return an empty products list.';
 
   static GenerativeModel _model(String name) => FirebaseAI.googleAI().generativeModel(
