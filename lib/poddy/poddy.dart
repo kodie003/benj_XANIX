@@ -25,12 +25,12 @@ const poddyTips = <String, List<String>>{
   'log': [
     'Sold: tap + for each one sold today.',
     'Count: type how many are on the shelf now.',
-    'Bought: record what you bought at the market.',
+    'Bought something? Record it on the Buy tab.',
   ],
   'buy': [
     'Type the cash you have to spend.',
     'Most urgent items come first.',
-    'After buying, record it under Log > Bought.',
+    'After buying, tap I bought at the top.',
   ],
   'stock': [
     'Each line is one product over time.',

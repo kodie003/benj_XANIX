@@ -3,15 +3,18 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/forecast.dart';
 import '../core/repo.dart';
+import 'log.dart';
 import 'product.dart';
 import 'shell.dart';
 import 'ui.dart';
 
-/// F5 weekly buying list, with F6 (calendar adjustment shown) and F12 (cash budget).
+/// F5 weekly buying list, with F6 (calendar adjustment shown) and F12 (cash budget),
+/// and F3, recording what was bought, so restocking happens in one place.
 class BuyScreen extends StatefulWidget {
-  const BuyScreen({super.key, required this.repo, required this.shell});
+  const BuyScreen({super.key, required this.repo, required this.shell, this.startOnBought = false});
   final ShopRepo repo;
   final ShellState shell;
+  final bool startOnBought;
 
   @override
   State<BuyScreen> createState() => _BuyScreenState();
@@ -19,9 +22,30 @@ class BuyScreen extends StatefulWidget {
 
 class _BuyScreenState extends State<BuyScreen> {
   final _cash = TextEditingController();
+  late bool _bought = widget.startOnBought;
 
   @override
   Widget build(BuildContext context) {
+    final repo = widget.repo;
+    if (repo.products.isEmpty) {
+      return ListView(padding: const EdgeInsets.all(16), children: const [
+        Empty(icon: Icons.shopping_basket_outlined, text: 'Add products and log for a few days. Your weekly buying list will appear here.'),
+      ]);
+    }
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        child: SegmentedButton<bool>(
+          segments: const [ButtonSegment(value: false, label: Text('To buy')), ButtonSegment(value: true, label: Text('I bought'))],
+          selected: {_bought},
+          onSelectionChanged: (s) => setState(() => _bought = s.first),
+        ),
+      ),
+      Expanded(child: _bought ? LogScreen(repo: repo, initialMode: 'restock', modes: const ['restock']) : _list(context)),
+    ]);
+  }
+
+  Widget _list(BuildContext context) {
     final repo = widget.repo;
     final text = Theme.of(context).textTheme;
     final cash = double.tryParse(_cash.text.trim());
@@ -36,12 +60,6 @@ class _BuyScreenState extends State<BuyScreen> {
     final weekEnd = now.add(const Duration(days: 7));
     final events = repo.events.where((e) => !e.end.isBefore(now) && !e.start.isAfter(weekEnd)).toList();
     final factor = averageFactor(now, 7, repo.events);
-
-    if (repo.products.isEmpty) {
-      return ListView(padding: const EdgeInsets.all(16), children: const [
-        Empty(icon: Icons.shopping_basket_outlined, text: 'Add products and log for a few days. Your weekly buying list will appear here.'),
-      ]);
-    }
 
     return ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 220), children: [
       Text('To buy this week', style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
@@ -95,7 +113,7 @@ class _BuyScreenState extends State<BuyScreen> {
         const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8, children: [
           FilledButton.icon(
-            onPressed: () => widget.shell.go(1, logMode: 'restock'),
+            onPressed: () => setState(() => _bought = true),
             icon: const Icon(Icons.add_shopping_cart),
             label: const Text('Record what I bought'),
           ),

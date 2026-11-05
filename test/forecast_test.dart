@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:benj/core/categories.dart';
 import 'package:benj/core/forecast.dart';
 import 'package:benj/core/models.dart';
 import 'package:benj/auth_service.dart';
 import 'package:benj/core/countries.dart';
 import 'package:benj/core/reader.dart';
+import 'package:benj/screens/stock.dart';
+import 'package:flutter/painting.dart' show HSLColor;
 import 'package:flutter_test/flutter_test.dart';
 
 Product p(String id, String name, {String size = '', String unit = 'bag', double? warn}) => Product(id: id, name: name, unit: unit, size: size, warningLevel: warn);
@@ -105,6 +108,73 @@ void main() {
     });
     test('a benj account login is the number at a reserved address', () {
       expect(AuthService.phoneLogin('+233241234567'), '233241234567@phone.benj.invalid');
+    });
+  });
+
+  group('categories', () {
+    final milk = p('a', 'Peak Milk', unit: 'tin');
+    final soap = p('b', 'Key Soap', unit: 'piece');
+
+    test('names are tidied and join the spelling the owner already uses', () {
+      expect(cleanCategory('  toiletries   and  soap '), 'Toiletries and soap');
+      expect(matchCategory('PROVISIONS', ['Provisions']), 'Provisions');
+      expect(matchCategory('drinks', ['Provisions']), 'Drinks');
+      expect(cleanCategory('x' * 80).length, kCategoryMax);
+    });
+
+    test('groups run A to Z with unsorted products last', () {
+      final all = [
+        Product(id: '1', name: 'Soap', unit: 'piece', category: 'Toiletries'),
+        Product(id: '2', name: 'Pen', unit: 'piece'),
+        Product(id: '3', name: 'Rice', unit: 'bag', category: 'Provisions'),
+      ];
+      expect(groupByCategory(all).map((g) => g.$1).toList(), ['Provisions', 'Toiletries', kNotSorted]);
+    });
+
+    test('a suggestion maps numbers to products and ignores nonsense', () {
+      const answer = '{"assignments":[{"number":1,"category":"provisions"},{"number":2,"category":"Toiletries"},'
+          '{"number":9,"category":"Drinks"},{"number":1.5,"category":"Drinks"},{"number":2,"category":" "}]}';
+      expect(CategorySuggester.parse(answer, [milk, soap], ['Provisions']), {'a': 'Provisions', 'b': 'Toiletries'});
+      expect(CategorySuggester.parse('', [milk], []), isEmpty);
+      expect(CategorySuggester.parse('{"assignments":"no"}', [milk], []), isEmpty);
+    });
+
+    test('the prompt numbers every product and reuses existing categories', () {
+      final text = CategorySuggester.prompt([milk, soap], ['Provisions']);
+      expect(text, contains('1. Peak Milk'));
+      expect(text, contains('2. Key Soap'));
+      expect(text, contains('already uses these categories, so reuse them whenever they fit: Provisions.'));
+    });
+
+    test('a product keeps its category through saving', () {
+      expect(Product(id: '1', name: 'Soap', unit: 'piece', category: 'Toiletries').toMap()['category'], 'Toiletries');
+    });
+  });
+
+  group('stock chart', () {
+    final today = DateTime(2026, 11, 5);
+    (Product, Forecast) row(String id, double count) {
+      final product = p(id, id);
+      return (product, forecastProduct(product, [StockLog(product: id, at: today, type: 'count', quantity: count)], [], today, null));
+    }
+
+    test('lowest stock comes first even with no sales yet', () {
+      final rows = [row('Coke', 4), row('Rice', 1), row('Milo', 2)]..sort(lowestFirst);
+      expect(rows.map((r) => r.$1.id).toList(), ['Rice', 'Milo', 'Coke']);
+    });
+
+    test('every product gets its own colour; variants share a hue', () {
+      final many = [for (var i = 0; i < 30; i++) p('$i', 'Product $i')];
+      expect(productColors(many).values.toSet().length, 30);
+      final rice = productColors([p('a', 'Rice', size: '1 kg'), p('b', 'Rice', size: '5 kg')]);
+      expect(rice['a'], isNot(rice['b']));
+      expect(HSLColor.fromColor(rice['a']!).hue, closeTo(HSLColor.fromColor(rice['b']!).hue, 1));
+    });
+
+    test('a line needs a second day: one count shows only on its day, then carries forward', () {
+      final logs = [StockLog(product: 'a', at: today.subtract(const Duration(days: 2)), type: 'count', quantity: 10), StockLog(product: 'a', at: today, type: 'sale', quantity: 3)];
+      expect(stockHistory(logs, today, 4), [null, 10, 10, 7]);
+      expect(stockHistory([logs.last], today, 2).where((v) => v != null).length, 1);
     });
   });
 }

@@ -5,13 +5,16 @@ import '../core/repo.dart';
 import 'product_form.dart';
 import 'ui.dart';
 
-/// F2 quick stock log and F3 restock entry, on one screen.
-/// Sold: tap +/- per product. Count: type what's on the shelf. Bought: quantity and price.
+/// Entering stock. The Log tab has Sold (tap +/- per product) and Count (type what's on the
+/// shelf), F2. The Buy tab uses this for I bought (quantity and price), F3.
 /// Seconds per entry are recorded, because logging is the riskiest assumption (PRD 4).
 class LogScreen extends StatefulWidget {
-  const LogScreen({super.key, required this.repo, this.initialMode = 'sale'});
+  const LogScreen({super.key, required this.repo, this.initialMode = 'sale', this.modes = const ['sale', 'count']});
   final ShopRepo repo;
   final String initialMode;
+
+  /// The kinds of entry on offer; with only one, there is nothing to switch.
+  final List<String> modes;
 
   @override
   State<LogScreen> createState() => _LogScreenState();
@@ -26,9 +29,9 @@ class _LogScreenState extends State<LogScreen> {
   bool _typed = false;
 
   static const _modes = {
-    'sale': ('Sold', 'Tap + for each one sold today.'),
-    'count': ('Count', 'Type how many are on the shelf right now.'),
-    'restock': ('Bought', 'What did you buy at the market?'),
+    'sale': ('Sold', 'Tap + for each one sold today.', 'Sales sent'),
+    'count': ('Count', 'Type how many are on the shelf right now.', 'Counts sent'),
+    'restock': ('Bought', 'Tap + for what you bought, then add the price.', 'Purchases sent'),
   };
 
   void _touch() => _started ??= DateTime.now();
@@ -67,7 +70,7 @@ class _LogScreenState extends State<LogScreen> {
       _typed = false;
     });
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved ${list.length} ${list.length == 1 ? 'item' : 'items'}.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${_modes[_mode]!.$3}: ${list.length} ${list.length == 1 ? 'item' : 'items'}.')));
     }
   }
 
@@ -76,14 +79,15 @@ class _LogScreenState extends State<LogScreen> {
     final repo = widget.repo;
     final n = _entries().length;
     return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-        child: SegmentedButton<String>(
-          segments: [for (final e in _modes.entries) ButtonSegment(value: e.key, label: Text(e.value.$1))],
-          selected: {_mode},
-          onSelectionChanged: (s) => setState(() => _mode = s.first),
+      if (widget.modes.length > 1)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: SegmentedButton<String>(
+            segments: [for (final m in widget.modes) ButtonSegment(value: m, label: Text(_modes[m]!.$1))],
+            selected: {_mode},
+            onSelectionChanged: (s) => setState(() => _mode = s.first),
+          ),
         ),
-      ),
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
         child: Align(alignment: Alignment.centerLeft, child: Text(_modes[_mode]!.$2, style: Theme.of(context).textTheme.titleMedium)),
@@ -94,7 +98,16 @@ class _LogScreenState extends State<LogScreen> {
                 Empty(icon: Icons.inventory_2_outlined, text: 'Add the products you sell first.', action: 'Add a product', onAction: () => showProductForm(context, repo)),
               ])
             : ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 200), children: [
-                for (final p in repo.products) _row(p),
+                if (repo.categories.isEmpty)
+                  for (final p in repo.products) _row(p)
+                else
+                  for (final (name, list) in groupByCategory(repo.products)) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12, bottom: 4),
+                      child: Text(name, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                    ),
+                    for (final p in list) _row(p),
+                  ],
                 const SizedBox(height: 8),
                 OutlinedButton.icon(onPressed: () => showProductForm(context, repo), icon: const Icon(Icons.add), label: const Text('Add a product')),
               ]),
@@ -108,7 +121,7 @@ class _LogScreenState extends State<LogScreen> {
               width: double.infinity,
               child: FilledButton(
                 onPressed: n == 0 ? null : _save,
-                child: Padding(padding: const EdgeInsets.all(14), child: Text(n == 0 ? 'Nothing to save yet' : 'Save $n ${n == 1 ? 'item' : 'items'}')),
+                child: Padding(padding: const EdgeInsets.all(14), child: Text(n == 0 ? 'Nothing to send yet' : 'Send $n ${n == 1 ? 'item' : 'items'}')),
               ),
             ),
           ),
@@ -118,7 +131,8 @@ class _LogScreenState extends State<LogScreen> {
 
   Widget _row(Product p) {
     final f = widget.repo.forecasts[p.id];
-    final onShelf = f == null ? '' : 'On the shelf: ${units(p, f.stock)}';
+    final onList = _mode == 'restock' && f != null && f.suggestedQty > 0 ? ' · on your list: ${f.suggestedQty}' : '';
+    final onShelf = f == null ? '' : 'On the shelf: ${units(p, f.stock)}$onList';
     final q = _qty[p.id] ?? 0;
     final text = Theme.of(context).textTheme;
     Widget stepper() => Row(mainAxisSize: MainAxisSize.min, children: [

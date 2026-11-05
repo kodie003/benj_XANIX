@@ -166,6 +166,25 @@ class ShopRepo extends ChangeNotifier {
     return products.where((p) => p.key == k).firstOrNull;
   }
 
+  /// The owner's categories, A to Z.
+  List<String> get categories => [
+        for (final (name, _) in groupByCategory(products))
+          if (name != kNotSorted) name,
+      ];
+
+  List<Product> get unsorted => [for (final p in products) if (p.category.isEmpty) p];
+
+  /// The owner closed Poddy's offer to sort products; don't offer again this session.
+  bool hideSortOffer = false;
+
+  /// Saves categories for many products at once: product id -> category.
+  Future<void> setCategories(Map<String, String> changes) async {
+    if (changes.isEmpty) return;
+    final batch = _db.batch();
+    changes.forEach((id, category) => batch.update(_products.doc(id), {'category': category}));
+    await _settle(batch.commit());
+  }
+
   Future<void> deleteProduct(String id) => _settle(_products.doc(id).delete());
 
   /// Goes up each time the owner saves a log, so Poddy can cheer.
