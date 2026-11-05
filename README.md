@@ -80,6 +80,14 @@ Poddy **peeks in from the edge** instead of sitting at the top of the page: from
 
 **Credits (required by the licence):** Poddy is the 3D model ["Poddy M1 - Stylized Floating Robot - Posed"](https://sketchfab.com/3d-models/poddy-m1-stylized-floating-robot-posed-6b5b90dc52ae4933a103d0a71777ecbd) by [Exmoor beast](https://sketchfab.com/Exmoorbeast), licensed under [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/). We converted it from FBX to glTF, resized its textures to 1024 px with the ambient occlusion baked in, and kept its six held poses as clips. Rendered with [three.js](https://threejs.org) 0.185.1 (MIT, see `web/poddy/three/LICENSE`). The same credit is in the app under ⋮ > Credits.
 
+## Ask Poddy
+
+Tap Poddy and choose **Ask Poddy** to type a question. Gemini (`gemini-3.5-flash-lite`, then `gemini-3.8-flash`) answers in a sentence or two from a short guide to benj and a summary of the shop (product names, stock, what is low); it never sees the full records. For "how do I…" questions it also names the section, and **Show me** takes the owner there with a 2-3 step guided tour (`lib/poddy/assistant.dart`, `lib/poddy/ask.dart`, `ShellState.showSection`).
+
+## Units and duplicates
+
+Units: bag, pack, carton, crate, bottle, tin, piece and **olonka**, Ghana's tin measure for grains. Olonka has no standard size, so benj counts olonkas and never converts them to kilos. "Rice 1 kg" and "rice 1kg" count as the same product (`Product.keyOf`): a photo that lists a product twice adds the counts and asks the owner to check; products already in the shop are flagged with **Remove duplicates** before saving; and Settings > Products > **Remove duplicates** merges existing copies, moving their logs so no sales are lost.
+
 ## Run locally
 
 ```bash
