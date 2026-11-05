@@ -46,7 +46,7 @@ class ProductReader {
       items: Schema.object(
         properties: {
           'name': Schema.string(description: 'Product name without the size, e.g. "Rice", "Milo", "Indomie noodles".'),
-          'size': Schema.string(description: 'Size or weight if stated, e.g. "1 kg", "4.5 kg", "500 ml". Empty if none.'),
+          'size': Schema.string(description: 'Size or weight if stated, written with digits and a space, e.g. "1 kg" (for "one kilo" or "1kg"), "4.5 kg", "500 ml". Empty if none.'),
           'unit': Schema.enumString(enumValues: kUnits, description: 'How it is counted.'),
           // Required but nullable: the model must answer each one (a number, or null when it
           // really isn't there) instead of quietly leaving counts and prices out.
