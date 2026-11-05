@@ -11,6 +11,7 @@ rules_version = '2';
 // shops/{uid}/products/{id}
 //   name: string (required, 1-120)     unit: string (required)     size: string (optional)
 //   costPrice, sellPrice, warningLevel: number >= 0 or null
+//   category: string (optional, 0-60)  empty means not sorted yet
 //
 // shops/{uid}/stockLogs/{id}
 //   product: string (required)         at: timestamp (required)
@@ -50,11 +51,12 @@ service cloud.firestore {
         && d.consentAt is timestamp;
     }
     function isValidProduct(d) {
-      return d.keys().hasOnly(['name', 'unit', 'size', 'costPrice', 'sellPrice', 'warningLevel'])
+      return d.keys().hasOnly(['name', 'unit', 'size', 'costPrice', 'sellPrice', 'warningLevel', 'category'])
         && d.keys().hasAll(['name', 'unit'])
         && isStr(d.name, 120) && d.name.size() > 0
         && isStr(d.unit, 30)
         && optStr(d, 'size', 30)
+        && optStr(d, 'category', 60)
         && optNum(d, 'costPrice') && optNum(d, 'sellPrice') && optNum(d, 'warningLevel');
     }
     function isValidLog(d) {

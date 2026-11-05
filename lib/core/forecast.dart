@@ -193,6 +193,13 @@ List<double?> stockHistory(List<StockLog> logs, DateTime today, int days) {
   return out;
 }
 
+/// Fewest on the shelf first. Products on the same count go by whichever runs out sooner.
+int lowestFirst((Product, Forecast) a, (Product, Forecast) b) {
+  final byStock = a.$2.stock.compareTo(b.$2.stock);
+  if (byStock != 0) return byStock;
+  return (a.$2.daysLeft ?? double.infinity).compareTo(b.$2.daysLeft ?? double.infinity);
+}
+
 /// F12: when cash is short, spend it on what is most at risk and moves fastest.
 List<({Product product, Forecast f, int buy, double cost})> budgetPlan(List<(Product, Forecast)> rows, double? cash) {
   final wanted = rows.where((r) => r.$2.suggestedQty > 0).toList()

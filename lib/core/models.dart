@@ -32,6 +32,40 @@ class Shop {
 /// beans); it has no standard size, so benj counts olonkas and never converts to kilos.
 const kUnits = ['bag', 'pack', 'carton', 'crate', 'bottle', 'tin', 'piece', 'olonka'];
 
+/// Shown for products with no category. Never stored: those keep an empty category.
+const kNotSorted = 'Not sorted';
+const kCategoryMax = 40;
+
+/// "  toiletries " -> "Toiletries".
+String cleanCategory(String raw) {
+  final s = raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (s.isEmpty) return '';
+  final cut = s.length > kCategoryMax ? s.substring(0, kCategoryMax).trim() : s;
+  return cut[0].toUpperCase() + cut.substring(1);
+}
+
+/// Tidies a name and, if the owner already has it in other capitals, uses theirs.
+String matchCategory(String raw, Iterable<String> existing) {
+  final name = cleanCategory(raw);
+  for (final e in existing) {
+    if (e.toLowerCase() == name.toLowerCase()) return e;
+  }
+  return name;
+}
+
+/// Products under their categories, A to Z, with the unsorted ones last.
+List<(String, List<Product>)> groupByCategory(List<Product> products, {String Function(Product)? of}) {
+  final groups = <String, List<Product>>{};
+  for (final p in products) {
+    (groups[(of?.call(p) ?? p.category)] ??= []).add(p);
+  }
+  final names = groups.keys.where((n) => n.isNotEmpty).toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  return [
+    for (final n in names) (n, groups[n]!),
+    if (groups[''] != null) (kNotSorted, groups['']!),
+  ];
+}
+
 class Product {
   Product({
     required this.id,
@@ -41,9 +75,13 @@ class Product {
     this.costPrice,
     this.sellPrice,
     this.warningLevel,
+    this.category = '',
   });
 
   final String id, name, unit, size;
+
+  /// The owner's umbrella for this product, such as Toiletries. Empty means not sorted yet.
+  final String category;
   final double? costPrice, sellPrice;
 
   /// null means "accept benj's suggestion" (F4).
@@ -74,6 +112,7 @@ class Product {
       costPrice: (m['costPrice'] as num?)?.toDouble(),
       sellPrice: (m['sellPrice'] as num?)?.toDouble(),
       warningLevel: (m['warningLevel'] as num?)?.toDouble(),
+      category: m['category'] ?? '',
     );
   }
 
@@ -84,6 +123,7 @@ class Product {
         'costPrice': costPrice,
         'sellPrice': sellPrice,
         'warningLevel': warningLevel,
+        'category': category,
       };
 
   String plural(num n) {

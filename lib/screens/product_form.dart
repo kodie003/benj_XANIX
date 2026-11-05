@@ -6,6 +6,7 @@ import '../core/reader.dart';
 import '../core/repo.dart';
 import '../core/voice_stub.dart' if (dart.library.js_interop) '../core/voice_web.dart';
 import '../poddy/poddy.dart';
+import 'categories.dart';
 
 /// F1 add or edit a product, on its own page. Three ways in: type it, say it, or
 /// take a photo (a label, a shelf, or a stock-book page). Speech and photos are read
@@ -27,6 +28,7 @@ class ProductFormPage extends StatefulWidget {
 class _ProductFormPageState extends State<ProductFormPage> {
   late final _name = TextEditingController(text: widget.editing?.name);
   late final _size = TextEditingController(text: widget.editing?.size);
+  late final _category = TextEditingController(text: widget.editing?.category);
   final _onHand = TextEditingController();
   late final _cost = TextEditingController(text: _num(widget.editing?.costPrice));
   late final _sell = TextEditingController(text: _num(widget.editing?.sellPrice));
@@ -59,6 +61,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
         costPrice: _parse(_cost.text),
         sellPrice: _parse(_sell.text),
         warningLevel: _parse(_warn.text),
+        category: matchCategory(_category.text, widget.repo.categories),
       );
 
   /// "Rice 1 kg is already in your shop", or null.
@@ -113,7 +116,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
   }
 
   void _clear() {
-    for (final c in [_name, _size, _onHand, _cost, _sell, _warn, _heard]) {
+    for (final c in [_name, _size, _category, _onHand, _cost, _sell, _warn, _heard]) {
       c.clear();
     }
     _unit = '';
@@ -255,7 +258,13 @@ class _ProductFormPageState extends State<ProductFormPage> {
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added $n ${n == 1 ? 'product' : 'products'}.')));
-    Navigator.pop(context);
+    // Several products at once: Poddy offers categories for them right away.
+    if (n > 1) {
+      final repo = widget.repo;
+      Navigator.of(context).pushReplacement(MaterialPageRoute<void>(builder: (_) => CategoriesPage(repo: repo, suggest: true)));
+    } else {
+      Navigator.pop(context);
+    }
   }
 
   // ---------------------------------------------------------------- page
@@ -421,6 +430,15 @@ class _ProductFormPageState extends State<ProductFormPage> {
       if (!_editing) Padding(padding: const EdgeInsets.only(top: 6, bottom: 10), child: Text('Product details', style: text.titleMedium)),
       field(_name, 'Name', hint: 'e.g. Rice'),
       field(_size, 'Size (optional)', hint: 'e.g. 1 kg, 4.5 kg, 500 ml'),
+      field(_category, 'Category (optional)', hint: 'e.g. Provisions, Toiletries'),
+      if (widget.repo.categories.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final c in widget.repo.categories)
+              ChoiceChip(label: Text(c), selected: _category.text.trim().toLowerCase() == c.toLowerCase(), onSelected: (_) => setState(() => _category.text = c)),
+          ]),
+        ),
       Text('It comes as a', style: text.labelLarge),
       const SizedBox(height: 6),
       Wrap(spacing: 8, runSpacing: 8, children: [

@@ -25,7 +25,7 @@ The app starts empty: no demo shop and no sample data.
 |---|---|---|
 | F1 | Shop setup: business name at sign-up; products on a full page, **typed, spoken, or from a photo** (label, shelf or stock-book page) read by Gemini into the form for the owner to check; location, phone, restock day in Settings | `screens/auth.dart`, `product_form.dart`, `core/reader.dart`, `settings.dart` |
 | F2 | Quick stock log: +/- per product or a count, one screen, saves offline; seconds per entry recorded | `screens/log.dart` |
-| F3 | Restock entry: quantity and price per product | `screens/log.dart` (Bought) |
+| F3 | Restock entry: quantity and price per product | `screens/buy.dart` (I bought), using `screens/log.dart` |
 | F4 | Low-stock warning with days left; owner's level or benj's suggestion | `screens/home.dart`, `product.dart` |
 | F5 | Weekly buying list with plain-language lines | `screens/buy.dart` |
 | F6 | Campus calendar: owner-added events with a demand change, shown on the list | `settings.dart`, `buy.dart` |
@@ -83,6 +83,10 @@ Poddy **peeks in from the edge** instead of sitting at the top of the page: from
 ## Ask Poddy
 
 Tap Poddy and choose **Ask Poddy** to type a question. Gemini (`gemini-3.5-flash-lite`, then `gemini-3.8-flash`) answers in a sentence or two from a short guide to benj and a summary of the shop (product names, stock, what is low); it never sees the full records. For "how do I…" questions it also names the section, and **Show me** takes the owner there with a 2-3 step guided tour (`lib/poddy/assistant.dart`, `lib/poddy/ask.dart`, `ShellState.showSection`).
+
+## Product categories
+
+Categories are umbrellas such as Provisions, Drinks and Toiletries. Poddy offers to sort unsorted products (after a photo adds several, or from the Stock tab). Gemini sees only product names and existing categories, and groups by main use, the rule retail classifications such as GS1 GPC follow (`lib/core/categories.dart`). Nothing is saved until the owner checks it on the categories page, where they can rename, move or remove anything, now or later (`lib/screens/categories.dart`). Stock filters by category and Log lists products under them.
 
 ## Units and duplicates
 

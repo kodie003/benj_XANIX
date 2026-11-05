@@ -7,6 +7,7 @@ import '../core/models.dart';
 import '../core/repo.dart';
 import '../poddy/poddy.dart';
 import 'info.dart';
+import 'categories.dart';
 import 'product.dart';
 import 'product_form.dart';
 import 'ui.dart';
@@ -68,10 +69,18 @@ class SettingsScreen extends StatelessWidget {
                           ListTile(
                             dense: true,
                             title: Text(p.label),
-                            subtitle: Text([p.unit, if (p.costPrice != null) 'you pay ${cedis(p.costPrice!)}', if (p.warningLevel != null) 'warn at ${qty(p.warningLevel!)}'].join(' · ')),
+                            subtitle: Text([if (p.category.isNotEmpty) p.category, p.unit, if (p.costPrice != null) 'you pay ${cedis(p.costPrice!)}', if (p.warningLevel != null) 'warn at ${qty(p.warningLevel!)}'].join(' · ')),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () => openProduct(context, repo, p),
                           ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                          child: OutlinedButton.icon(
+                            onPressed: () => openCategories(context, repo),
+                            icon: const Icon(Icons.category_outlined),
+                            label: const Text('Product categories'),
+                          ),
+                        ),
                         // Same product added twice? One tap merges the copies, keeping their logs.
                         Padding(
                           padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),

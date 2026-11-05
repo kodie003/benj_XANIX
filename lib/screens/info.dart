@@ -97,6 +97,11 @@ const privacySections = <(String, String)>[
         'and benj does not keep the conversation.',
   ),
   (
+    'Sorting products into categories',
+    'When you ask Poddy to suggest categories, your product names and any categories you already have are sent to Google Gemini '
+        'through Firebase to sort them. Nothing else from your records is sent, and nothing is saved until you tap Save.',
+  ),
+  (
     'Speaking and photos',
     'Only when you choose Speak or Photo while adding a product. '
         'Speech is turned into words by your browser (on Android, Chrome uses Google for this). '

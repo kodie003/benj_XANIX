@@ -26,6 +26,7 @@ class Shell extends StatefulWidget {
 class ShellState extends State<Shell> {
   int _tab = 0;
   String _logMode = 'sale';
+  bool _buyBought = false;
   bool _welcomed = false;
   bool _touring = false;
 
@@ -67,7 +68,7 @@ class ShellState extends State<Shell> {
         const TourStep("Hi! I'm Poddy. Let me show you around."),
         TourStep('Home shows what is running low and what to buy.', target: _bodyKey),
         TourStep('Log: tap what you sold each day. It takes seconds.', target: _logKey),
-        TourStep('Buy: your buying list for the week.', target: _buyKey),
+        TourStep('Buy: your list for the week, and record what you bought.', target: _buyKey),
         TourStep('Stock: your stock over time, and if I was right.', target: _stockKey),
         TourStep('Settings: your restock day and campus events.', target: _settingsKey),
         const TourStep('Start by adding what you sell. Tap me anytime for help!'),
@@ -83,16 +84,17 @@ class ShellState extends State<Shell> {
   void showSection(String section) {
     final settings = TourStep('Tap Settings, the gear at the top right.', target: _settingsKey);
     final (int? tab, String? mode, List<TourStep> steps) = switch (section) {
-      'log_sold' => (1, 'sale', [TourStep('This is Log. Sold is picked at the top.', target: _bodyKey), TourStep('Tap + for each one sold today.', target: _bodyKey), TourStep('Then tap Save at the bottom.', target: _bodyKey)]),
-      'log_count' => (1, 'count', [TourStep('This is Log, on Count.', target: _bodyKey), TourStep('Type how many are on the shelf now, then Save.', target: _bodyKey)]),
-      'log_bought' => (1, 'restock', [TourStep('This is Log, on Bought.', target: _bodyKey), TourStep('Tap + for what you bought and type the price, then Save.', target: _bodyKey)]),
+      'log_sold' => (1, 'sale', [TourStep('This is Log. Sold is picked at the top.', target: _bodyKey), TourStep('Tap + for each one sold today.', target: _bodyKey), TourStep('Then tap Send at the bottom.', target: _bodyKey)]),
+      'log_count' => (1, 'count', [TourStep('This is Log, on Count.', target: _bodyKey), TourStep('Type how many are on the shelf now, then tap Send.', target: _bodyKey)]),
+      'log_bought' => (2, 'restock', [TourStep('This is Buy, on I bought.', target: _bodyKey), TourStep('Tap + for what you bought, add the price, then tap Send.', target: _bodyKey)]),
       'add_product' => (1, null, [TourStep('Scroll to the bottom of Log and tap "Add a product".', target: _bodyKey), TourStep('Type it, speak it, or take a photo. Then check and Save.', target: _bodyKey)]),
       'delete_product' => (3, null, [TourStep('On Stock, tap the product you want to remove.', target: _bodyKey), TourStep('Then tap the bin icon at the top right, and Delete.', target: _bodyKey)]),
-      'buy' => (2, null, [TourStep('This is your buying list for the week.', target: _bodyKey), TourStep('Bought them? Tap "Record what I bought".', target: _bodyKey)]),
+      'buy' => (2, null, [TourStep('This is your buying list for the week.', target: _bodyKey), TourStep('Bought them? Tap I bought at the top.', target: _bodyKey)]),
       'budget' => (2, null, [TourStep('Type the cash you have at the top.', target: _bodyKey), TourStep('The most urgent items come first.', target: _bodyKey)]),
       'stock' || 'forecast' => (3, null, [TourStep('Each line is one product over time.', target: _bodyKey), TourStep('Tap a product to see if I was right.', target: _bodyKey)]),
       'home' => (0, null, [TourStep('Home shows what is running low and what to buy.', target: _bodyKey)]),
       'duplicates' => (null, null, [settings, const TourStep('Under Products, tap "Remove duplicates".')]),
+      'categories' => (null, null, [settings, const TourStep('Under Products, tap "Product categories".'), const TourStep('Let me suggest them, change anything, then Save.')]),
       'restock_day' => (null, null, [settings, const TourStep('Under Your shop, pick your usual restock day.')]),
       'calendar' => (null, null, [settings, const TourStep('Under Campus calendar, tap Add for exams or breaks.')]),
       'shop_details' => (null, null, [settings, const TourStep('Tap your shop name to change its details.')]),
@@ -107,16 +109,17 @@ class ShellState extends State<Shell> {
         if (_tab == 0) _welcomed = true;
         _tab = tab;
       }
-      if (mode != null) _logMode = mode;
+      _buyBought = mode == 'restock';
+      if (mode != null && !_buyBought) _logMode = mode;
       _guide = steps;
       _touring = true;
     });
   }
 
-  /// Other screens use this to jump to a tab, e.g. "Log today" or "Record what I bought".
-  void go(int tab, {String? logMode}) => setState(() {
+  /// Other screens use this to jump to a tab, e.g. "Log today".
+  void go(int tab) => setState(() {
         if (_tab == 0) _welcomed = true;
-        if (logMode != null) _logMode = logMode;
+        _buyBought = false;
         _tab = tab;
       });
 
@@ -126,7 +129,7 @@ class ShellState extends State<Shell> {
     final (side, lines, tips, pose) = switch (_tab) {
       0 => (PeekSide.right, [if (!_welcomed) owner.isEmpty ? 'Welcome back!' : 'Welcome back, $owner!', mood.line], poddyTips['home']!, mood.mood),
       1 => (PeekSide.left, [repo.products.isEmpty ? 'Add a product first.' : 'Tap what you sold.'], poddyTips['log']!, 'present'),
-      2 => (PeekSide.bottom, [repo.products.isEmpty ? 'Nothing to buy yet.' : "Here's your list."], poddyTips['buy']!, 'present'),
+      2 => (PeekSide.left, [repo.products.isEmpty ? 'Nothing to buy yet.' : "Here's your list."], poddyTips['buy']!, 'present'),
       _ => (PeekSide.right, ['Your stock over time.'], poddyTips['stock']!, 'idle'),
     };
     return PoddyPeek(
@@ -136,7 +139,7 @@ class ShellState extends State<Shell> {
       lines: lines,
       tips: tips,
       flashTick: repo.savedTick,
-      flashLine: 'Saved. Nice work!',
+      flashLine: 'Sent. Nice work!',
       lift: 24,
       onAsk: _ask,
     );
@@ -151,7 +154,7 @@ class ShellState extends State<Shell> {
         final pages = [
           HomeScreen(repo: repo, shell: this),
           LogScreen(key: ValueKey(_logMode), repo: repo, initialMode: _logMode),
-          BuyScreen(repo: repo, shell: this),
+          BuyScreen(key: ValueKey(_buyBought), repo: repo, shell: this, startOnBought: _buyBought),
           StockScreen(repo: repo),
         ];
         final scaffold = Scaffold(
