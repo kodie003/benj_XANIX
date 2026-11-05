@@ -1,6 +1,7 @@
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
+import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
 import 'package:flutter/widgets.dart';
 
 /// Draws Poddy (web/poddy/poddy.js) inside a platform view.
@@ -75,6 +76,9 @@ class _PoddyViewState extends State<PoddyView> {
         },
         child: HtmlElementView.fromTagName(
           tagName: 'div',
+          // Let taps pass through the 3D canvas to Flutter, so tapping Poddy works.
+          // (The default, opaque, gives every tap to the web element and Flutter never sees it.)
+          hitTestBehavior: PlatformViewHitTestBehavior.transparent,
           onElementCreated: (Object el) {
             _el = el as JSObject;
             _mountWhenReady();
