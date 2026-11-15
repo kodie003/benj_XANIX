@@ -135,6 +135,10 @@ class _LogScreenState extends State<LogScreen> {
     final onShelf = f == null ? '' : 'On the shelf: ${units(p, f.stock)}$onList';
     final q = _qty[p.id] ?? 0;
     final text = Theme.of(context).textTheme;
+    // You cannot sell what is not on the shelf: + stops at the stock benj knows about.
+    final selling = _mode == 'sale' && f != null;
+    final none = selling && f.stock <= 0;
+    final canAdd = !selling || q < f.stock;
     Widget stepper() => Row(mainAxisSize: MainAxisSize.min, children: [
           IconButton.filledTonal(
             tooltip: 'One less ${p.label}',
@@ -149,10 +153,12 @@ class _LogScreenState extends State<LogScreen> {
           SizedBox(width: 36, child: Text(qty(q), textAlign: TextAlign.center, style: text.titleLarge)),
           IconButton.filled(
             tooltip: 'One more ${p.label}',
-            onPressed: () => setState(() {
-              _touch();
-              _qty[p.id] = q + 1;
-            }),
+            onPressed: !canAdd
+                ? null
+                : () => setState(() {
+                      _touch();
+                      _qty[p.id] = q + 1;
+                    }),
             icon: const Icon(Icons.add),
           ),
         ]);
@@ -165,6 +171,10 @@ class _LogScreenState extends State<LogScreen> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(p.label, style: text.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                 if (onShelf.isNotEmpty) Text(onShelf, style: text.bodySmall),
+                if (none)
+                  Text('None left to sell. Count it, or record what you bought.', style: text.bodySmall?.copyWith(color: Theme.of(context).colorScheme.error))
+                else if (selling && !canAdd)
+                  Text('That is all you have on the shelf.', style: text.bodySmall),
               ]),
             ),
             if (_mode == 'count')

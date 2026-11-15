@@ -7,6 +7,7 @@ import 'package:benj/core/models.dart';
 import 'package:benj/auth_service.dart';
 import 'package:benj/core/countries.dart';
 import 'package:benj/core/reader.dart';
+import 'package:benj/screens/buy.dart';
 import 'package:benj/screens/stock.dart';
 import 'package:flutter/painting.dart' show HSLColor;
 import 'package:flutter_test/flutter_test.dart';
@@ -175,6 +176,42 @@ void main() {
       final logs = [StockLog(product: 'a', at: today.subtract(const Duration(days: 2)), type: 'count', quantity: 10), StockLog(product: 'a', at: today, type: 'sale', quantity: 3)];
       expect(stockHistory(logs, today, 4), [null, 10, 10, 7]);
       expect(stockHistory([logs.last], today, 2).where((v) => v != null).length, 1);
+    });
+  });
+
+  group('cash plan', () {
+    final today = DateTime(2026, 11, 5);
+    (Product, Forecast) selling(String id, double cost, double start, double perDay) {
+      final product = Product(id: id, name: id, unit: 'bag', costPrice: cost == 0 ? null : cost);
+      final logs = [
+        StockLog(product: id, at: today.subtract(const Duration(days: 5)), type: 'count', quantity: start),
+        for (var d = 4; d >= 0; d--) StockLog(product: id, at: today.subtract(Duration(days: d)), type: 'sale', quantity: perDay),
+      ];
+      return (product, forecastProduct(product, logs, [], today, null));
+    }
+
+    test('enough cash covers the list and says what is left', () {
+      final rows = [selling('Rice', 10, 20, 4)];
+      final need = rows.first.$2.suggestedQty;
+      expect(need, greaterThan(0));
+      final a = cashAdvice(budgetPlan(rows, need * 10 + 5), need * 10 + 5);
+      expect(a.headline, contains('covers your whole list'));
+      expect(a.lines.join(' '), contains('GHS 5 is left'));
+    });
+
+    test('short cash says how much more is needed, and for what', () {
+      final rows = [selling('Rice', 10, 20, 4)];
+      final need = rows.first.$2.suggestedQty;
+      final a = cashAdvice(budgetPlan(rows, 10), 10);
+      expect(a.headline, contains('will not cover everything'));
+      expect(a.lines.join(' '), contains('You need GHS ${(need - 1) * 10} more for Rice'));
+    });
+
+    test('no prices, nothing to buy and still learning each get a plain answer', () {
+      final rows = [selling('Gari', 0, 20, 4)];
+      expect(cashAdvice(budgetPlan(rows, 50), 50).headline, contains("can't plan"));
+      expect(cashAdvice([], 50).headline, 'You have enough of everything this week.');
+      expect(cashAdvice([], 50, learning: true).headline, contains('still learning'));
     });
   });
 }
