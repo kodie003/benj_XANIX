@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'auth_service.dart';
 import 'brand.dart';
+import 'core/branches.dart';
 import 'core/models.dart';
 import 'core/repo.dart';
 import 'firebase_options.dart';
@@ -58,13 +59,31 @@ class _GateState extends State<_Gate> {
   final _auth = AuthService();
   ShopRepo? _repo;
 
+  // An owner's branches, and the branch they are looking at (null: their own shop).
+  BranchList? _branches;
+  ShopRepo? _branchRepo;
+
   ShopRepo _repoFor(String uid) {
     if (_repo?.uid != uid) {
       _repo?.dispose();
       _repo = ShopRepo(uid);
+      _dropBranches();
     }
     return _repo!;
   }
+
+  void _dropBranches() {
+    _branchRepo?.dispose();
+    _branchRepo = null;
+    _branches?.dispose();
+    _branches = null;
+  }
+
+  /// Opens one of the owner's branches, or their own shop when [uid] is null.
+  void _view(String? uid) => setState(() {
+        _branchRepo?.dispose();
+        _branchRepo = uid == null ? null : ShopRepo(uid);
+      });
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +95,7 @@ class _GateState extends State<_Gate> {
         if (user == null) {
           _repo?.dispose();
           _repo = null;
+          _dropBranches();
           return const AuthScreen();
         }
         final repo = _repoFor(user.uid);
@@ -92,7 +112,21 @@ class _GateState extends State<_Gate> {
               }
               return NameShopScreen(repo: repo, user: user, onSignOut: _auth.signOut);
             }
-            return Shell(repo: repo, auth: _auth);
+            // Only a main shop has branches; a branch account sees just its own shop.
+            if (!repo.shop!.isBranch) _branches ??= BranchList(user.uid);
+            final branches = _branches;
+            if (branches == null) return Shell(repo: repo, ownRepo: repo, auth: _auth);
+            return ListenableBuilder(
+              listenable: branches,
+              builder: (context, _) {
+                // A branch removed (here or on another phone) closes if it was open.
+                if (_branchRepo != null && branches.loaded && branches.byId(_branchRepo!.uid) == null) {
+                  _branchRepo!.dispose();
+                  _branchRepo = null;
+                }
+                return Shell(repo: _branchRepo ?? repo, ownRepo: repo, auth: _auth, branches: branches, onView: _view);
+              },
+            );
           },
         );
       },

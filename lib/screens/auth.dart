@@ -120,6 +120,13 @@ class _AuthScreenState extends State<AuthScreen> with _FormRunner {
                       child: const Text('Sign in'),
                     ),
                   ]),
+                  Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                    Text('At a branch or warehouse?', style: text.bodyMedium),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BranchSignInScreen())),
+                      child: const Text('Sign in as a branch'),
+                    ),
+                  ]),
                   const SizedBox(height: 10),
                   const Row(children: [Expanded(child: Divider()), Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Text('or')), Expanded(child: Divider())]),
                   const SizedBox(height: 12),
@@ -304,8 +311,78 @@ class _SignInScreenState extends State<SignInScreen> with _FormRunner {
                   const SizedBox(height: 10),
                   ...messages(),
                   Text('Signed up with Google? Go back and tap Continue with Google.', textAlign: TextAlign.center, style: text.bodySmall),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pushReplacement(MaterialPageRoute<void>(builder: (_) => const BranchSignInScreen())),
+                    child: const Text('At a branch or warehouse? Sign in as a branch'),
+                  ),
                 ]),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Staff at a branch or warehouse: the main shop's name and the password the owner gave
+/// them. The password says which branch it is.
+class BranchSignInScreen extends StatefulWidget {
+  const BranchSignInScreen({super.key});
+
+  @override
+  State<BranchSignInScreen> createState() => _BranchSignInScreenState();
+}
+
+class _BranchSignInScreenState extends State<BranchSignInScreen> with _FormRunner {
+  final _auth = AuthService();
+  final _main = TextEditingController();
+  final _password = TextEditingController();
+
+  void _submit() {
+    if (_main.text.trim().isEmpty) {
+      setState(() => error = 'Type the name of the main shop.');
+      return;
+    }
+    if (_password.text.isEmpty) {
+      setState(() => error = 'Type the branch password.');
+      return;
+    }
+    run(() => _auth.signInBranch(_main.text, _password.text), (e) {
+      if (e is BenjAuthError && e.code == 'wrong') return "That shop name or branch password isn't right. Check with the shop's owner.";
+      return AuthService.friendly(e);
+    }, signsIn: true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Scaffold(
+      appBar: AppBar(leading: BackButton(onPressed: () => Navigator.of(context).maybePop()), title: const Text('Sign in as a branch')),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                SizedBox(height: 160, child: PoddyView(mood: busy ? 'present' : 'hello', flash: 'sad', flashTick: oops)),
+                const Center(child: _Bubble('Welcome to the team!')),
+                const SizedBox(height: 18),
+                TextField(
+                  controller: _main,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(labelText: 'Main shop name', hintText: 'e.g. Ama Provisions', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                PasswordField(controller: _password, label: 'Branch password', onSubmitted: () => busy ? null : _submit()),
+                const SizedBox(height: 12),
+                FilledButton(onPressed: busy ? null : _submit, child: Padding(padding: const EdgeInsets.all(14), child: Text(busy ? 'Please wait…' : 'Sign in'))),
+                const SizedBox(height: 10),
+                ...messages(),
+                Text("Don't have these? Ask the shop's owner. They set them up in Settings, under Branches.", textAlign: TextAlign.center, style: text.bodySmall),
+              ]),
             ),
           ),
         ),

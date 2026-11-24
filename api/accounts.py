@@ -21,9 +21,24 @@ POST /api/accounts with JSON {"action": ...}:
 From the app alone, Firebase only deletes a login soon after signing in. delete_login has
 no such limit because it uses a Google service key (Vercel env BENJ_ADMIN_KEY, set up with
 scripts/setup_delete_access.py). The account deleted is always the one the idToken proves.
+
+Branches (other shops, warehouses) belong to a main shop. Each is its own login with a
+random, unguessable id; staff only ever type the main shop's name and the branch password,
+and the password picks the branch. So two branches of one shop never share a password,
+and none may use the owner's own password.
+
+    branchLinks/{branchUid} -> {main}          (who owns the branch; firestore.rules trust it)
+    logins/{sha256("branch:main:branchUid")} -> {uid, login, kind: "branch", main, name}
+
+  branch_create   {idToken, name, password, mainName?} -> {uid, name}
+  branch_signin   {main, password}                     -> {login}
+  branch_password {idToken, branch, password}          (owner sets a new branch password)
+  branch_delete   {idToken, branch}                    (after the app deleted its records)
 """
 
+import datetime
 import hashlib
+import secrets
 import json
 import os
 import re
@@ -175,8 +190,9 @@ def fs_set(k, uid, login, kind):
         raise ApiError(502, {"error": "index-unavailable"})
 
 
-def fs_docs_of(uid):
-    query = {"structuredQuery": {"from": [{"collectionId": "logins"}], "where": {"fieldFilter": {"field": {"fieldPath": "uid"}, "op": "EQUAL", "value": {"stringValue": uid}}}}}
+def fs_query(field, value):
+    """Index entries whose field equals value, as (doc id, fields)."""
+    query = {"structuredQuery": {"from": [{"collectionId": "logins"}], "where": {"fieldFilter": {"field": {"fieldPath": field}, "op": "EQUAL", "value": {"stringValue": value}}}}}
     status, rows = call(f"{FS}:runQuery", query, token=svc_token())
     if status != 200:
         raise ApiError(502, {"error": "index-unavailable"})
@@ -184,12 +200,39 @@ def fs_docs_of(uid):
     for row in rows if isinstance(rows, list) else []:
         d = row.get("document")
         if d:
-            out.append((d["name"].split("/")[-1], d["fields"].get("kind", {}).get("stringValue", "")))
+            out.append((d["name"].split("/")[-1], {n: list(v.values())[0] for n, v in d.get("fields", {}).items()}))
     return out
+
+
+def fs_docs_of(uid):
+    return [(doc_id, f.get("kind", "")) for doc_id, f in fs_query("uid", uid)]
 
 
 def fs_delete(k):
     call(f"{FS}/logins/{k}", token=svc_token(), method="DELETE")
+
+
+NOW = object()  # stands for "the time of writing" in fs_write
+
+
+def to_value(v):
+    if v is NOW:
+        return {"timestampValue": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")}
+    if isinstance(v, bool):
+        return {"booleanValue": v}
+    return {"stringValue": str(v)}
+
+
+def fs_write(path, data, token, new=False):
+    """Writes a whole document. new=True fails if it already exists."""
+    url = f"{FS}/{path}" + ("?currentDocument.exists=false" if new else "")
+    status, _ = call(url, {"fields": {k: to_value(v) for k, v in data.items()}}, token=token, method="PATCH")
+    if status != 200:
+        raise ApiError(502, {"error": "write-failed"})
+
+
+def fs_remove(path, token):
+    call(f"{FS}/{path}", token=token, method="DELETE")
 
 
 # The Google token for deleting logins, reused while it is fresh.
@@ -288,6 +331,7 @@ def act_reset(body):
 
 def act_unregister(body):
     uid, _ = user_of(body.get("idToken", ""))
+    remove_branches(uid)
     for doc_id, _ in fs_docs_of(uid):
         fs_delete(doc_id)
     return {"ok": True}
@@ -305,6 +349,7 @@ def act_delete_ready(body):
 def act_delete_login(body):
     uid, _ = user_of(body.get("idToken", ""))
     token = admin_token()  # Before anything changes, so a bad key leaves the account whole.
+    remove_branches(uid)  # The app deleted their records already; their logins go with the owner's.
     for doc_id, _ in fs_docs_of(uid):
         fs_delete(doc_id)
     status, _ = call(f"{IDT}/projects/{PROJECT}/accounts:delete", {"localId": uid}, token=token)
@@ -313,7 +358,140 @@ def act_delete_login(body):
     return {"ok": True}
 
 
-ACTIONS = {"available": act_available, "register": act_register, "resolve": act_resolve, "reset": act_reset, "unregister": act_unregister, "delete_ready": act_delete_ready, "delete_login": act_delete_login}
+# ---------------------------------------------------------------- branches
+
+BRANCH_DOMAIN = "branch.benj.invalid"
+MAX_BRANCHES = 20
+
+
+def is_branch_login(login):
+    return login.endswith("@" + BRANCH_DOMAIN)
+
+
+def branch_key(main, branch):
+    return key("branch", f"{main}:{branch}")
+
+
+def branches_of(main):
+    """This owner's branches: [{uid, login, name}]."""
+    return [f for _, f in fs_query("main", main) if f.get("kind") == "branch"]
+
+
+def owner_of(body):
+    """The signed-in owner. A branch login can't manage branches."""
+    uid, login = user_of(body.get("idToken", ""))
+    if is_branch_login(login):
+        raise ApiError(403, {"error": "branch-account"})
+    return uid, login
+
+
+def clean_branch_name(s):
+    return re.sub(r"\s+", " ", (s or "").strip())[:60]
+
+
+def check_password(password, owner_login, branches):
+    """The password must pick exactly one branch, and must not open the owner's account."""
+    if len(password) < 6:
+        raise ApiError(400, {"error": "weak-password"})
+    if password_ok(owner_login, password):
+        raise ApiError(409, {"error": "owner-password"})
+    for b in branches:
+        if password_ok(b["login"], password):
+            raise ApiError(409, {"error": "password-used", "name": b.get("name", "")})
+
+
+def remove_branch(main, branch, token=None):
+    """Removes a branch's sign-in. Its records were deleted by the app first."""
+    if token is None:
+        try:
+            token = admin_token()
+        except Exception:  # Without the admin key the login stays, but nothing leads to it any more.
+            token = None
+    if token:
+        call(f"{IDT}/projects/{PROJECT}/accounts:delete", {"localId": branch}, token=token)
+    fs_delete(branch_key(main, branch))
+    fs_remove(f"branchLinks/{branch}", svc_token())
+
+
+def remove_branches(main):
+    for b in branches_of(main):
+        remove_branch(main, b["uid"])
+
+
+def act_branch_create(body):
+    main, owner_login = owner_of(body)
+    name = clean_branch_name(body.get("name"))
+    password = body.get("password") or ""
+    main_name = (body.get("mainName") or "").strip()[:120]
+    if not name:
+        raise ApiError(400, {"error": "missing"})
+    branches = branches_of(main)
+    if len(branches) >= MAX_BRANCHES:
+        raise ApiError(409, {"error": "too-many-branches"})
+    if any(norm_business(b.get("name", "")) == norm_business(name) for b in branches):
+        raise ApiError(409, {"error": "branch-name-taken"})
+    check_password(password, owner_login, branches)
+
+    login = f"b{secrets.token_hex(10)}@{BRANCH_DOMAIN}"
+    status, res = call(f"{IDT}/accounts:signUp?key={API_KEY}", {"email": login, "password": password, "returnSecureToken": True})
+    if status != 200:
+        msg = (res.get("error") or {}).get("message", "")
+        raise ApiError(400 if "WEAK_PASSWORD" in msg else 502, {"error": "weak-password" if "WEAK_PASSWORD" in msg else "service"})
+    branch, branch_token = res["localId"], res["idToken"]
+    try:
+        # The link first: firestore.rules only accept a branch shop that it points to.
+        fs_write(f"branchLinks/{branch}", {"main": main}, svc_token(), new=True)
+        fs_write(f"shops/{branch}", {"name": name, "mainShop": main, "mainName": main_name, "consentAt": NOW}, branch_token, new=True)
+        fs_write(f"logins/{branch_key(main, branch)}", {"uid": branch, "login": login, "kind": "branch", "main": main, "name": name, "hasEmail": False}, svc_token())
+    except Exception:
+        # Undo, so no half-made branch is left behind.
+        fs_remove(f"shops/{branch}", branch_token)
+        fs_remove(f"branchLinks/{branch}", svc_token())
+        fs_delete(branch_key(main, branch))
+        call(f"{IDT}/accounts:delete?key={API_KEY}", {"idToken": branch_token})
+        raise
+    return {"uid": branch, "name": name}
+
+
+def act_branch_signin(body):
+    main_name, password = body.get("main", ""), body.get("password", "")
+    if not norm_business(main_name) or not password:
+        raise ApiError(400, {"error": "missing"})
+    entry = fs_get(key("business", norm_business(main_name)))
+    if entry:
+        for b in branches_of(entry["uid"]):
+            if password_ok(b["login"], password):
+                return {"login": b["login"]}
+    raise ApiError(401, {"error": "wrong"})
+
+
+def act_branch_password(body):
+    main, owner_login = owner_of(body)
+    branch = body.get("branch", "")
+    if not branch or not fs_get(branch_key(main, branch)):
+        raise ApiError(404, {"error": "not-found"})
+    password = body.get("password") or ""
+    check_password(password, owner_login, [b for b in branches_of(main) if b["uid"] != branch])
+    status, _ = call(f"{IDT}/projects/{PROJECT}/accounts:update", {"localId": branch, "password": password}, token=admin_token())
+    if status != 200:
+        raise ApiError(502, {"error": "service"})
+    return {"ok": True}
+
+
+def act_branch_delete(body):
+    main, _ = owner_of(body)
+    branch = body.get("branch", "")
+    if not branch or not fs_get(branch_key(main, branch)):
+        raise ApiError(404, {"error": "not-found"})
+    remove_branch(main, branch)
+    return {"ok": True}
+
+
+ACTIONS = {
+    "available": act_available, "register": act_register, "resolve": act_resolve, "reset": act_reset, "unregister": act_unregister,
+    "delete_ready": act_delete_ready, "delete_login": act_delete_login,
+    "branch_create": act_branch_create, "branch_signin": act_branch_signin, "branch_password": act_branch_password, "branch_delete": act_branch_delete,
+}
 
 
 class handler(BaseHTTPRequestHandler):

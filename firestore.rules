@@ -23,7 +23,13 @@ rules_version = '2';
 //   name: string (required)            start, end: timestamp (required)
 //   factor: number 0-5 (required)      demand multiplier
 //
-// Nothing is public. An owner reads and writes only their own shop.
+// Nothing is public. An owner reads and writes only their own shop, and the shops of
+// their branches (warehouses, other branches).
+//
+// Branches: shops/{branchUid} also has mainShop (the owner's uid) and mainName.
+// branchLinks/{branchUid} -> {main} is written only by benj's account service
+// (api/accounts.py) and is what proves who owns a branch. mainShop must match it
+// and can never change.
 // ===============================================================
 
 service cloud.firestore {
@@ -31,6 +37,9 @@ service cloud.firestore {
 
     function isOwner(uid) {
       return request.auth != null && request.auth.uid == uid;
+    }
+    function isService() {
+      return request.auth != null && request.auth.token.email == 'svc-logins@benj.invalid';
     }
     function isStr(v, max) {
       return v is string && v.size() <= max;
@@ -42,11 +51,25 @@ service cloud.firestore {
       return !(k in d) || d[k] == null || (d[k] is number && d[k] >= 0);
     }
 
+    // The owner of branch {uid}, by the service-written link. Owners' own shops have none.
+    function isMainOf(uid) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/branchLinks/$(uid))
+        && get(/databases/$(database)/documents/branchLinks/$(uid)).data.main == request.auth.uid;
+    }
+    function canUse(uid) {
+      return isOwner(uid) || isMainOf(uid);
+    }
+    function mainOf(d) {
+      return d.get('mainShop', '');
+    }
+
     function isValidShop(d) {
-      return d.keys().hasOnly(['name', 'location', 'ownerPhone', 'ownerName', 'restockDay', 'consentAt'])
+      return d.keys().hasOnly(['name', 'location', 'ownerPhone', 'ownerName', 'restockDay', 'consentAt', 'mainShop', 'mainName'])
         && d.keys().hasAll(['name', 'consentAt'])
         && isStr(d.name, 120) && d.name.size() > 0
         && optStr(d, 'location', 200) && optStr(d, 'ownerPhone', 40) && optStr(d, 'ownerName', 120)
+        && optStr(d, 'mainShop', 128) && optStr(d, 'mainName', 120)
         && (!('restockDay' in d) || d.restockDay == null || (d.restockDay is int && d.restockDay >= 1 && d.restockDay <= 7))
         && d.consentAt is timestamp;
     }
@@ -79,20 +102,27 @@ service cloud.firestore {
     }
 
     match /shops/{uid} {
-      allow read, delete: if isOwner(uid);
-      allow create, update: if isOwner(uid) && isValidShop(request.resource.data);
+      allow get, delete: if canUse(uid);
+      // An owner lists their branches with where('mainShop', '==', their uid).
+      allow list: if request.auth != null && mainOf(resource.data) == request.auth.uid;
+      // A shop may name a main shop only if the service linked it to that owner.
+      allow create: if isOwner(uid) && isValidShop(request.resource.data)
+        && (mainOf(request.resource.data) == '' || (exists(/databases/$(database)/documents/branchLinks/$(uid))
+            && get(/databases/$(database)/documents/branchLinks/$(uid)).data.main == mainOf(request.resource.data)));
+      allow update: if canUse(uid) && isValidShop(request.resource.data)
+        && mainOf(request.resource.data) == mainOf(resource.data);
 
       match /products/{id} {
-        allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid) && isValidProduct(request.resource.data);
+        allow read, delete: if canUse(uid);
+        allow create, update: if canUse(uid) && isValidProduct(request.resource.data);
       }
       match /stockLogs/{id} {
-        allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid) && isValidLog(request.resource.data);
+        allow read, delete: if canUse(uid);
+        allow create, update: if canUse(uid) && isValidLog(request.resource.data);
       }
       match /events/{id} {
-        allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid) && isValidEvent(request.resource.data);
+        allow read, delete: if canUse(uid);
+        allow create, update: if canUse(uid) && isValidEvent(request.resource.data);
       }
     }
 
@@ -100,7 +130,10 @@ service cloud.firestore {
     // read it; only benj's account service (api/accounts.py), signed in as this
     // service login, can. It only reveals an account after Firebase checks the password.
     match /logins/{key} {
-      allow read, write: if request.auth != null && request.auth.token.email == 'svc-logins@benj.invalid';
+      allow read, write: if isService();
+    }
+    match /branchLinks/{branch} {
+      allow read, write: if isService();
     }
 
     match /{document=**} {

@@ -18,7 +18,7 @@ class PoddyAssistant {
   /// Places Poddy can take the owner to. Keep in step with ShellState._guideSteps.
   static const sections = [
     'none', 'home', 'log_sold', 'log_count', 'log_bought', 'add_product', 'delete_product', 'duplicates', 'categories',
-    'buy', 'budget', 'stock', 'forecast', 'restock_day', 'calendar', 'shop_details', 'privacy', 'delete_account', 'sign_out',
+    'buy', 'budget', 'stock', 'forecast', 'restock_day', 'calendar', 'shop_details', 'privacy', 'delete_account', 'sign_out', 'branches',
   ];
 
   static final _schema = Schema.object(properties: {
@@ -38,6 +38,7 @@ benj helps a small shop owner in Ghana know what to restock, how much, and when.
 - Stock: a line chart of each product's stock over time, week or month, with a dropdown to focus on one category; it draws the 5 lowest first, and tapping a name adds or removes its line. Lines start after the second day of logging. The list sorts by lowest stock, fastest moving or name. Tap a product to see "Was benj right?" (forecast vs actual), its warning level and recent logs.
 - Warnings: benj warns before an item runs out. The owner can set a warning level per product (edit the product), or leave it blank and benj suggests one after 3 days of logs.
 - Settings: shop details, usual restock day, products, campus calendar events (exams, breaks: busier or quieter), logging numbers, About, Privacy, Credits, Sign out, Delete account (the very last item).
+- Branches and warehouses: Settings > Branches and warehouses > Add. The owner names it and sets a password. Staff there tap "Sign in as a branch" and type the main shop's name and that password; they log for their branch only. The owner switches between shops with the shop button at the top; its last item, "Stock across shops" (also in Settings under Branches), adds up each product over the shops the owner ticks (main shop, branches, warehouses) and shows how much is where. The owner can change a branch's password or remove it in Settings.
 - Forecasts need about 3 days of logs. Owners sign in with business name, phone or email and password. Forgot password: the sign-in page, using the account email. Help: benj.support@gmail.com.
 ''';
 

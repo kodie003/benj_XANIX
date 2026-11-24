@@ -3,9 +3,11 @@ import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuthException;
 
 import '../auth_service.dart';
 import '../brand.dart';
+import '../core/branches.dart';
 import '../core/models.dart';
 import '../core/repo.dart';
 import '../poddy/poddy.dart';
+import 'all_shops.dart';
 import 'info.dart';
 import 'categories.dart';
 import 'product.dart';
@@ -15,14 +17,18 @@ import 'ui.dart';
 /// PRD Settings: shop details, restock day, products, the campus calendar (F6),
 /// and the logging numbers the team reports to the judges.
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key, required this.repo, required this.auth});
+  const SettingsScreen({super.key, required this.repo, required this.auth, this.branches, this.onView});
   final ShopRepo repo;
   final AuthService auth;
+
+  /// A main shop's branches (null for a branch account), and how to open one.
+  final BranchList? branches;
+  final ValueChanged<String?>? onView;
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: repo,
+      listenable: Listenable.merge([repo, ?branches]),
       builder: (context, _) {
         final shop = repo.shop;
         if (shop == null) return const Scaffold();
@@ -58,6 +64,18 @@ class SettingsScreen extends StatelessWidget {
                 ]),
               ),
             ),
+            if (branches != null) _branchSection(context, shop, branches!),
+            if (shop.isBranch)
+              Section(
+                title: 'Branch',
+                child: Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.store_mall_directory_outlined),
+                    title: Text('A branch of ${shop.mainName.isEmpty ? 'the main shop' : shop.mainName}'),
+                    subtitle: const Text("The shop's owner can see what you log here, change this branch's password, or remove it."),
+                  ),
+                ),
+              ),
             Section(
               title: 'Products (${repo.products.length})',
               trailing: TextButton.icon(onPressed: () => showProductForm(context, repo), icon: const Icon(Icons.add), label: const Text('Add')),
@@ -147,14 +165,16 @@ class SettingsScreen extends StatelessWidget {
                 ]),
               ),
             ),
-            // The very last thing on the page, on purpose.
-            const SizedBox(height: 32),
-            OutlinedButton.icon(
+            // The very last thing on the page, on purpose. Only the owner removes a branch.
+            if (!shop.isBranch) ...[
+              const SizedBox(height: 32),
+              OutlinedButton.icon(
               style: OutlinedButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error, side: BorderSide(color: Theme.of(context).colorScheme.error)),
               onPressed: () => _deleteAccount(context),
               icon: const Icon(Icons.delete_forever_outlined),
               label: const Padding(padding: EdgeInsets.all(12), child: Text('Delete account')),
             ),
+            ],
           ]),
         );
       },
@@ -172,7 +192,7 @@ class SettingsScreen extends StatelessWidget {
           Text("We're sorry to see you leave.", textAlign: TextAlign.center, style: Theme.of(c).textTheme.titleLarge),
           const SizedBox(height: 10),
           Text(
-            'This deletes ${repo.shop?.name ?? 'your shop'}, all its products and every log, and your benj account. It cannot be undone.',
+            'This deletes ${repo.shop?.name ?? 'your shop'}${(branches?.branches.isNotEmpty ?? false) ? ' and all ${branches!.branches.length} of its branches' : ''}, all products and every log, and your benj account. It cannot be undone.',
             textAlign: TextAlign.center,
           ),
         ]),
@@ -194,6 +214,17 @@ class SettingsScreen extends StatelessWidget {
     }
     try {
       // Records first, login last: if anything fails the owner can still sign in and retry.
+      // Branch records go first, while the owner can still reach them; their logins go
+      // with the owner's.
+      onView?.call(null);
+      for (final b in [...?branches?.branches]) {
+        final branchRepo = ShopRepo(b.uid);
+        try {
+          await branchRepo.deleteEverything();
+        } finally {
+          branchRepo.dispose();
+        }
+      }
       await repo.deleteEverything();
       await auth.deleteAccount(instantly: instantly);
       if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
@@ -223,6 +254,119 @@ class SettingsScreen extends StatelessWidget {
     }
     final confirmed = await showDialog<bool>(context: context, builder: (_) => _PasswordConfirm(auth: auth));
     return confirmed == true;
+  }
+
+  // ---- Branches and warehouses ----
+
+  Widget _branchSection(BuildContext context, Shop shop, BranchList list) => Section(
+        title: 'Branches and warehouses',
+        trailing: TextButton.icon(onPressed: () => _addBranch(context, shop, list), icon: const Icon(Icons.add), label: const Text('Add')),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(
+            'Another shop or a store room? Add it here with its own password. Its staff tap "Sign in as a branch" '
+            'and type "${shop.name}" and that password. Open any branch from the shop button at the top.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          if (list.branches.isEmpty)
+            const Text('No branches yet.')
+          else
+            Card(
+              child: Column(children: [
+                for (final b in list.branches)
+                  ListTile(
+                    leading: const Icon(Icons.store_mall_directory_outlined),
+                    title: Text(b.name),
+                    trailing: PopupMenuButton<String>(
+                      tooltip: 'Branch options',
+                      onSelected: (action) => switch (action) {
+                        'open' => _openBranch(context, b),
+                        'password' => _branchPassword(context, b),
+                        _ => _removeBranch(context, b),
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'open', child: Text('Open')),
+                        PopupMenuItem(value: 'password', child: Text('Change password')),
+                        PopupMenuItem(value: 'remove', child: Text('Remove')),
+                      ],
+                    ),
+                    onTap: () => _openBranch(context, b),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+                  child: OutlinedButton.icon(
+                    onPressed: () => openAllShops(context, repo, list),
+                    icon: const Icon(Icons.stacked_bar_chart),
+                    label: const Text('Stock across shops'),
+                  ),
+                ),
+              ]),
+            ),
+        ]),
+      );
+
+  void _openBranch(BuildContext context, Branch b) {
+    onView?.call(b.uid);
+    Navigator.of(context).popUntil((r) => r.isFirst);
+  }
+
+  Future<void> _addBranch(BuildContext context, Shop shop, BranchList list) async {
+    final made = await showDialog<String>(context: context, builder: (_) => _BranchForm(auth: auth, list: list, mainName: shop.name));
+    if (made != null && context.mounted) {
+      await showDialog<void>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: Text('$made is ready'),
+          content: Text(
+            'Tell the staff there:\n\n1. Open benj and tap "Sign in as a branch".\n2. Main shop name: ${shop.name}\n3. The password you just set.\n\n'
+            'They will only see $made.',
+          ),
+          actions: [FilledButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
+        ),
+      );
+    }
+  }
+
+  Future<void> _branchPassword(BuildContext context, Branch b) async {
+    final done = await showDialog<String>(context: context, builder: (_) => _BranchForm(auth: auth, list: branches!, mainName: '', branch: b));
+    if (done != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${b.name}'s password is changed. Staff there use the new one next time they sign in.")));
+    }
+  }
+
+  Future<void> _removeBranch(BuildContext context, Branch b) async {
+    final error = Theme.of(context).colorScheme.error;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Remove ${b.name}?'),
+        content: Text('This deletes ${b.name}, all its products and every log, and its staff can no longer sign in. It cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Keep it')),
+          FilledButton(style: FilledButton.styleFrom(backgroundColor: error), onPressed: () => Navigator.pop(c, true), child: const Text('Remove')),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    showDialog<void>(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    onView?.call(null); // never delete the shop that's on screen
+    final branchRepo = ShopRepo(b.uid);
+    try {
+      // Records first, while the owner can still reach them; then the sign-in.
+      await branchRepo.deleteEverything();
+      await auth.deleteBranch(b.uid);
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${b.name} is removed.')));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't remove ${b.name}: ${AuthService.friendly(e)}")));
+      }
+    } finally {
+      branchRepo.dispose();
+    }
   }
 
   Future<void> _removeDuplicates(BuildContext context) async {
@@ -263,6 +407,8 @@ class SettingsScreen extends StatelessWidget {
         ownerPhone: ownerPhone ?? s.ownerPhone,
         restockDay: clearRestock ? null : (restockDay ?? s.restockDay),
         consentAt: s.consentAt,
+        mainShop: s.mainShop,
+        mainName: s.mainName,
       );
 
   Future<void> _editShop(BuildContext context, Shop shop) async {
@@ -290,14 +436,16 @@ class SettingsScreen extends StatelessWidget {
     );
     if (ok == true) {
       final newName = name.text.trim();
-      if (newName != shop.name) {
-        // Business names sign people in, so a new name must not belong to another shop.
+      // Business names sign people in, so a new name must not belong to another shop.
+      // A branch's name doesn't sign anyone in; staff use the main shop's name.
+      if (newName != shop.name && !shop.isBranch) {
         try {
           await auth.registerNames(business: newName);
         } catch (e) {
           if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AuthService.friendly(e))));
           return;
         }
+        await branches?.renameMain(newName);
       }
       await repo.saveShop(_copy(shop, name: newName, ownerName: owner.text.trim(), location: location.text.trim(), ownerPhone: phone.text.trim()));
     }
@@ -430,6 +578,120 @@ class _PasswordConfirmState extends State<_PasswordConfirm> {
             onPressed: _busy ? null : _confirm,
             child: const Text('Delete everything'),
           ),
+        ],
+      );
+}
+
+/// Adds a branch (name and password), or sets a new password for [branch].
+/// Pops with the branch's name when done.
+class _BranchForm extends StatefulWidget {
+  const _BranchForm({required this.auth, required this.list, required this.mainName, this.branch});
+  final AuthService auth;
+  final BranchList list;
+  final String mainName;
+  final Branch? branch;
+
+  @override
+  State<_BranchForm> createState() => _BranchFormState();
+}
+
+class _BranchFormState extends State<_BranchForm> {
+  final _name = TextEditingController();
+  final _password = TextEditingController();
+  final _repeat = TextEditingController();
+  bool _busy = false, _show = false;
+  String? _error;
+
+  bool get _adding => widget.branch == null;
+
+  Future<void> _save() async {
+    final name = _name.text.trim();
+    String? problem;
+    if (_adding && name.isEmpty) {
+      problem = 'Give the branch a name, like "Warehouse" or "Osu shop".';
+    } else if (_adding && widget.list.nameTaken(name)) {
+      problem = 'You already have a branch with that name.';
+    } else if (_password.text.length < 6) {
+      problem = 'Use a password of at least 6 characters.';
+    } else if (_password.text != _repeat.text) {
+      problem = "The two passwords don't match.";
+    }
+    if (problem != null) {
+      setState(() => _error = problem);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      if (_adding) {
+        await widget.auth.createBranch(name: name, password: _password.text, mainName: widget.mainName);
+      } else {
+        await widget.auth.setBranchPassword(widget.branch!.uid, _password.text);
+      }
+      if (mounted) Navigator.pop(context, _adding ? name : widget.branch!.name);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = AuthService.friendly(e);
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _password.dispose();
+    _repeat.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(_adding ? 'Add a branch or warehouse' : 'New password for ${widget.branch!.name}'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (_adding) ...[
+              TextField(
+                controller: _name,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(labelText: 'Name', hintText: 'e.g. Warehouse, Osu shop'),
+              ),
+              const SizedBox(height: 8),
+            ],
+            TextField(
+              controller: _password,
+              obscureText: !_show,
+              autofocus: !_adding,
+              decoration: InputDecoration(
+                labelText: 'Password for its staff',
+                helperText: 'At least 6 characters. Not your own password.',
+                suffixIcon: IconButton(
+                  tooltip: _show ? 'Hide password' : 'Show password',
+                  icon: Icon(_show ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                  onPressed: () => setState(() => _show = !_show),
+                ),
+              ),
+            ),
+            TextField(
+              controller: _repeat,
+              obscureText: !_show,
+              onSubmitted: (_) => _busy ? null : _save(),
+              decoration: const InputDecoration(labelText: 'Repeat password'),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontWeight: FontWeight.w600)),
+            ],
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: _busy ? null : () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: _busy ? null : _save, child: Text(_busy ? 'Please wait…' : (_adding ? 'Add' : 'Save'))),
         ],
       );
 }

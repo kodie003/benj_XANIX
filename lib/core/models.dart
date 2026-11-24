@@ -3,11 +3,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// The data model from PRD section 9. Everything sits under shops/{uid}, so each
 /// owner's records are private to them.
 class Shop {
-  Shop({required this.name, this.location = '', this.ownerPhone = '', this.ownerName = '', this.restockDay, this.consentAt});
+  Shop({required this.name, this.location = '', this.ownerPhone = '', this.ownerName = '', this.restockDay, this.consentAt, this.mainShop = '', this.mainName = ''});
 
   final String name, location, ownerPhone, ownerName;
   final int? restockDay; // 1 Monday ... 7 Sunday
   final DateTime? consentAt;
+
+  /// For a branch or warehouse: the owner's uid and their shop's name. Empty for a main shop.
+  /// Set once by benj's account service; saves leave it as it is.
+  final String mainShop, mainName;
+  bool get isBranch => mainShop.isNotEmpty;
 
   factory Shop.fromMap(Map<String, dynamic> m) => Shop(
         name: m['name'] ?? '',
@@ -16,8 +21,11 @@ class Shop {
         ownerName: m['ownerName'] ?? '',
         restockDay: m['restockDay'],
         consentAt: (m['consentAt'] as Timestamp?)?.toDate(),
+        mainShop: m['mainShop'] ?? '',
+        mainName: m['mainName'] ?? '',
       );
 
+  /// mainShop is left out: saves merge, so it stays exactly as the service set it.
   Map<String, dynamic> toMap() => {
         'name': name,
         'location': location,
@@ -25,7 +33,14 @@ class Shop {
         'ownerName': ownerName,
         'restockDay': restockDay,
         'consentAt': consentAt == null ? FieldValue.serverTimestamp() : Timestamp.fromDate(consentAt!),
+        if (isBranch) 'mainName': mainName,
       };
+}
+
+/// One of an owner's branches or warehouses, as listed on their phone.
+class Branch {
+  Branch({required this.uid, required this.name});
+  final String uid, name;
 }
 
 /// How products are counted. "olonka" is the Ghanaian tin measure for grains (rice, gari,

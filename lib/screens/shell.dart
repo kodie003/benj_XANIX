@@ -3,9 +3,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../auth_service.dart';
 import '../brand.dart';
+import '../core/branches.dart';
 import '../core/repo.dart';
 import '../poddy/ask.dart';
 import '../poddy/poddy.dart';
+import 'all_shops.dart';
 import 'buy.dart';
 import 'home.dart';
 import 'log.dart';
@@ -15,9 +17,18 @@ import 'stock.dart';
 /// The whole product is one loop (PRD section 8): log quickly, get told what to buy,
 /// restock, and let the result sharpen the next forecast.
 class Shell extends StatefulWidget {
-  const Shell({super.key, required this.repo, required this.auth});
+  const Shell({super.key, required this.repo, required this.ownRepo, required this.auth, this.branches, this.onView});
+
+  /// The shop on screen: the signed-in shop, or one of its branches the owner opened.
   final ShopRepo repo;
+
+  /// The signed-in shop. Settings and the account always belong to it.
+  final ShopRepo ownRepo;
   final AuthService auth;
+
+  /// A main shop's branches and how to open one (null uid: back to the main shop).
+  final BranchList? branches;
+  final ValueChanged<String?>? onView;
 
   @override
   State<Shell> createState() => ShellState();
@@ -37,7 +48,7 @@ class ShellState extends State<Shell> {
   // What the orientation tour lights up.
   final _bodyKey = GlobalKey(), _logKey = GlobalKey(), _buyKey = GlobalKey(), _stockKey = GlobalKey(), _settingsKey = GlobalKey();
 
-  String get _tourFlag => 'benj_tour_done_${widget.repo.uid}';
+  String get _tourFlag => 'benj_tour_done_${widget.ownRepo.uid}';
 
   @override
   void initState() {
@@ -101,6 +112,7 @@ class ShellState extends State<Shell> {
       'privacy' => (null, null, [settings, const TourStep('Under Account, tap Privacy.')]),
       'delete_account' => (null, null, [settings, const TourStep('Scroll to the very bottom and tap Delete account.')]),
       'sign_out' => (null, null, [settings, const TourStep('Under Account, tap Sign out.')]),
+      'branches' => (null, null, [settings, const TourStep('Under Branches and warehouses, tap Add.'), const TourStep('Give it a name and a password for its staff.')]),
       _ => (null, null, <TourStep>[]),
     };
     if (steps.isEmpty) return;
@@ -145,6 +157,67 @@ class ShellState extends State<Shell> {
     );
   }
 
+  /// Which shop is on screen, for an owner with branches and for a branch's staff.
+  Widget _banner(ShopRepo repo) {
+    final own = widget.ownRepo.shop;
+    final String text;
+    if (repo != widget.ownRepo) {
+      text = 'Branch: ${repo.shop?.name ?? '…'}. What you log here goes to this branch.';
+    } else if (own != null && own.isBranch) {
+      text = '${own.name}${own.mainName.isEmpty ? '' : ', a branch of ${own.mainName}'}';
+    } else {
+      return const SizedBox.shrink();
+    }
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(children: [
+          Icon(Icons.store_mall_directory_outlined, size: 18, color: scheme.onSecondaryContainer),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: TextStyle(color: scheme.onSecondaryContainer, fontWeight: FontWeight.w600))),
+          if (repo != widget.ownRepo)
+            TextButton(onPressed: () => widget.onView?.call(null), child: const Text('Back to main')),
+        ]),
+      ),
+    );
+  }
+
+  static const _allShops = '_all_shops';
+
+  /// The owner picks their main shop or a branch, or compares stock across them.
+  Widget _switcher(ShopRepo repo) {
+    final own = widget.ownRepo;
+    final current = repo == own ? (own.shop?.name ?? 'Main shop') : (repo.shop?.name ?? '…');
+    return PopupMenuButton<String>(
+      tooltip: 'Switch shop',
+      onSelected: (uid) {
+        if (uid == _allShops) {
+          openAllShops(context, own, widget.branches!);
+        } else {
+          widget.onView?.call(uid == own.uid ? null : uid);
+        }
+      },
+      itemBuilder: (_) => [
+        CheckedPopupMenuItem(value: own.uid, checked: repo == own, child: Text('${own.shop?.name ?? 'Main shop'} (main)')),
+        const PopupMenuDivider(),
+        for (final b in widget.branches!.branches) CheckedPopupMenuItem(value: b.uid, checked: repo.uid == b.uid, child: Text(b.name)),
+        const PopupMenuDivider(),
+        const PopupMenuItem(value: _allShops, child: ListTile(leading: Icon(Icons.stacked_bar_chart), title: Text('Stock across shops'), contentPadding: EdgeInsets.zero)),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.storefront_outlined, size: 20),
+          const SizedBox(width: 4),
+          ConstrainedBox(constraints: const BoxConstraints(maxWidth: 120), child: Text(current, overflow: TextOverflow.ellipsis)),
+          const Icon(Icons.arrow_drop_down),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final repo = widget.repo;
@@ -161,15 +234,26 @@ class ShellState extends State<Shell> {
           appBar: AppBar(
             title: const BenjLogo(height: 26),
             actions: [
+              if (widget.branches?.branches.isNotEmpty ?? false) _switcher(repo),
               IconButton(
                 key: _settingsKey,
                 icon: const Icon(Icons.settings_outlined),
                 tooltip: 'Settings',
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SettingsScreen(repo: repo, auth: widget.auth))),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => SettingsScreen(repo: widget.ownRepo, auth: widget.auth, branches: widget.branches, onView: widget.onView)),
+                ),
               ),
             ],
           ),
-          body: Stack(children: [KeyedSubtree(key: _bodyKey, child: pages[_tab]), if (!_touring) _peek(repo)]),
+          body: Column(children: [
+            _banner(repo),
+            Expanded(
+              child: Stack(children: [
+                KeyedSubtree(key: _bodyKey, child: KeyedSubtree(key: ValueKey(repo.uid), child: pages[_tab])),
+                if (!_touring) _peek(repo),
+              ]),
+            ),
+          ]),
           bottomNavigationBar: NavigationBar(
             selectedIndex: _tab,
             onDestinationSelected: (i) => go(i),

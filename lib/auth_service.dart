@@ -26,8 +26,9 @@ class PendingShop {
 
 /// A failure from benj's account service, with a code [AuthService.friendly] explains.
 class BenjAuthError implements Exception {
-  BenjAuthError(this.code);
-  final String code; // business-taken, phone-taken, wrong, service, too-many-requests
+  BenjAuthError(this.code, [this.detail = '']);
+  final String code; // business-taken, phone-taken, wrong, service, too-many-requests, branch errors
+  final String detail; // e.g. the branch already using a password
   @override
   String toString() => 'BenjAuthError($code)';
 }
@@ -52,7 +53,9 @@ class AuthService {
     }
     final data = res.body.isEmpty ? <String, dynamic>{} : jsonDecode(res.body) as Map<String, dynamic>;
     if (res.statusCode == 200) return data;
-    if (res.statusCode == 409) throw BenjAuthError('${data['kind']}-taken');
+    if (res.statusCode == 409) throw BenjAuthError(data['kind'] != null ? '${data['kind']}-taken' : '${data['error']}', '${data['name'] ?? ''}');
+    if (res.statusCode == 400 && data['error'] == 'weak-password') throw BenjAuthError('weak-password');
+    if (res.statusCode == 403 || res.statusCode == 404) throw BenjAuthError('${data['error']}');
     if (res.statusCode == 401) throw BenjAuthError('wrong');
     if (res.statusCode == 429) throw BenjAuthError('too-many-requests');
     throw BenjAuthError('service');
@@ -98,6 +101,30 @@ class AuthService {
     final found = await _accounts({'action': 'resolve', 'identifier': id, 'password': password});
     await _auth.signInWithEmailAndPassword(email: found['login'] as String, password: password);
   }
+
+  // ---- Branches and warehouses (api/accounts.py) ----
+
+  Future<String> _token() async {
+    final token = await _auth.currentUser?.getIdToken();
+    if (token == null) throw BenjAuthError('service');
+    return token;
+  }
+
+  /// Staff at a branch sign in with the main shop's name and their branch's password.
+  Future<void> signInBranch(String mainShop, String password) async {
+    final found = await _accounts({'action': 'branch_signin', 'main': mainShop.trim(), 'password': password});
+    await _auth.signInWithEmailAndPassword(email: found['login'] as String, password: password);
+  }
+
+  /// The owner makes a branch. Its password must differ from theirs and every other branch's.
+  Future<void> createBranch({required String name, required String password, required String mainName}) async =>
+      _accounts({'action': 'branch_create', 'idToken': await _token(), 'name': name.trim(), 'password': password, 'mainName': mainName});
+
+  Future<void> setBranchPassword(String branch, String password) async =>
+      _accounts({'action': 'branch_password', 'idToken': await _token(), 'branch': branch, 'password': password});
+
+  /// Removes the branch's sign-in. Delete its records first (ShopRepo.deleteEverything).
+  Future<void> deleteBranch(String branch) async => _accounts({'action': 'branch_delete', 'idToken': await _token(), 'branch': branch});
 
   /// Sends Firebase's reset link to the account's email, if it has one.
   Future<void> requestReset(String identifier) => _accounts({'action': 'reset', 'identifier': identifier.trim()});
@@ -198,6 +225,7 @@ class AuthService {
   static String accountLabel(User? u) {
     final email = u?.email ?? '';
     if (email.endsWith('@$_phoneDomain')) return '+${email.split('@').first}';
+    if (email.endsWith('@branch.benj.invalid')) return ''; // a branch login: its id means nothing to people
     return email.isNotEmpty ? email : (u?.phoneNumber ?? '');
   }
 
@@ -288,6 +316,13 @@ class AuthService {
         'email-taken' => 'That email already has a benj account. Try signing in.',
         'wrong' => "That name, number, email or password isn't right.",
         'too-many-requests' => 'Too many tries. Please wait a little and try again.',
+        'weak-password' => 'Use a password of at least 6 characters.',
+        'owner-password' => "That's your own password. Give the branch a different one, so staff can't open your main shop.",
+        'password-used' => '${e.detail.isEmpty ? 'Another branch' : '"${e.detail}"'} already uses that password. Each branch needs its own.',
+        'branch-name-taken' => 'You already have a branch with that name.',
+        'too-many-branches' => 'You can have up to 20 branches.',
+        'branch-account' => "Only the main shop's owner can do that.",
+        'not-found' => 'That branch has already been removed.',
         _ => "We couldn't reach benj. Check your connection and try again.",
       };
     }
